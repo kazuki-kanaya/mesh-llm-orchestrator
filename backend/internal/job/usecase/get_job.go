@@ -10,11 +10,15 @@ import (
 )
 
 type GetJobRepository interface {
-	Get(ctx context.Context, jobID uuid.UUID) (*domain.Job, error)
+	GetByID(ctx context.Context, jobID uuid.UUID) (*domain.Job, error)
 }
 
 type GetJobUseCase struct {
 	repo GetJobRepository
+}
+
+type GetJobInput struct {
+	JobID uuid.UUID
 }
 
 type GetJobOutput struct {
@@ -34,8 +38,8 @@ func NewGetJobUseCase(repo GetJobRepository) *GetJobUseCase {
 	}
 }
 
-func (uc *GetJobUseCase) Execute(ctx context.Context, jobID uuid.UUID) (*GetJobOutput, error) {
-	job, err := uc.repo.Get(ctx, jobID)
+func (uc *GetJobUseCase) Execute(ctx context.Context, input GetJobInput) (*GetJobOutput, error) {
+	job, err := uc.repo.GetByID(ctx, input.JobID)
 	if err != nil {
 		return nil, err
 	}

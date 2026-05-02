@@ -18,3 +18,12 @@ func (s Status) IsTerminal() bool {
 		return false
 	}
 }
+
+func (s Status) IsCancelable() bool {
+	switch s {
+	case StatusQueued, StatusRunning:
+		return true
+	default:
+		return false
+	}
+}
