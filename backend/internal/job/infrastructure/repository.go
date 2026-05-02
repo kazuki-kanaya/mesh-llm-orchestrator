@@ -63,7 +63,7 @@ func (repo *JobRepository) GetByID(ctx context.Context, jobID uuid.UUID) (*domai
 			final_result,
 			error_message,
 			created_at,
-			updated_at,
+			updated_at
 		FROM jobs
 		WHERE job_id = $1
 	`
