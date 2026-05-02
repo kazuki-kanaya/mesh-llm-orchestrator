@@ -7,14 +7,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/ports"
 )
 
-type CreateJobRepository interface {
-	Create(ctx context.Context, job *domain.Job) error
-}
-
 type CreateJobUseCase struct {
-	repo CreateJobRepository
+	repo ports.JobRepository
 }
 
 type CreateJobInput struct {
@@ -28,7 +25,7 @@ type CreateJobOutput struct {
 	Status domain.Status
 }
 
-func NewCreateJobUseCase(repo CreateJobRepository) *CreateJobUseCase {
+func NewCreateJobUseCase(repo ports.JobRepository) *CreateJobUseCase {
 	return &CreateJobUseCase{
 		repo: repo,
 	}

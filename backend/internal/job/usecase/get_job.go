@@ -7,14 +7,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/ports"
 )
 
-type GetJobRepository interface {
-	GetByID(ctx context.Context, jobID uuid.UUID) (*domain.Job, error)
-}
-
 type GetJobUseCase struct {
-	repo GetJobRepository
+	repo ports.JobRepository
 }
 
 type GetJobInput struct {
@@ -32,7 +29,7 @@ type GetJobOutput struct {
 	UpdatedAt        time.Time
 }
 
-func NewGetJobUseCase(repo GetJobRepository) *GetJobUseCase {
+func NewGetJobUseCase(repo ports.JobRepository) *GetJobUseCase {
 	return &GetJobUseCase{
 		repo: repo,
 	}

@@ -6,15 +6,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/ports"
 )
 
-type CancelJobRepository interface {
-	GetByID(ctx context.Context, jobID uuid.UUID) (*domain.Job, error)
-	Update(ctx context.Context, job *domain.Job) error
-}
-
 type CancelJobUseCase struct {
-	repo CancelJobRepository
+	repo ports.JobRepository
 }
 
 type CancelJobInput struct {
@@ -26,7 +22,7 @@ type CancelJobOutput struct {
 	Status domain.Status
 }
 
-func NewCancelJobUseCase(repo CancelJobRepository) *CancelJobUseCase {
+func NewCancelJobUseCase(repo ports.JobRepository) *CancelJobUseCase {
 	return &CancelJobUseCase{
 		repo: repo,
 	}
