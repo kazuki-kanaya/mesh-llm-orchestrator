@@ -18,3 +18,21 @@ type Job struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
+
+func NewJob(
+	jobID uuid.UUID,
+	model string,
+	messages json.RawMessage,
+	generationParams json.RawMessage,
+	now time.Time,
+) *Job {
+	return &Job{
+		JobID:            jobID,
+		Model:            model,
+		Messages:         messages,
+		GenerationParams: generationParams,
+		Status:           StatusQueued,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+}
