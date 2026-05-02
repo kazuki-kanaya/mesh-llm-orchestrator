@@ -1,33 +1,33 @@
 # mesh-llm-orchestrator
 
-A design repository for an orchestration platform that enables production-oriented, on-premises distributed LLM inference with Mesh LLM.
+A design repository for an orchestration platform that makes Mesh LLM practical for production-oriented, on-premises distributed LLM inference.
 
 ---
 
 ## Status
 
-* Currently in the planning and design phase, prior to implementation
-* At this stage, the repository contains only the architectural direction and design notes
-* The initial architecture separates the Kubernetes-based control plane from the execution plane running on fixed GPU nodes
+* Currently in the planning and design phase before implementation
+* At this stage, the repository contains only architectural direction and design notes
+* The initial architecture separates a Kubernetes-based control plane from the execution plane
 
 ---
 
 ## What This Repository Aims to Build
 
-* Add the control layer required for real-world operations without exposing Mesh LLM directly
-* Safely handle inference requests from multiple users as asynchronous jobs
-* Stream progress and results for long-running inference workloads to preserve user experience
-* Keep the current fixed GPU node setup easy to evolve toward Kubernetes-managed infrastructure in the future
+* Add the control layer required for operations without exposing Mesh LLM directly
+* Safely process inference requests from multiple users as asynchronous jobs
+* Stream long-running inference results to preserve user experience
+* Assume a single Mesh LLM cluster at first, while keeping the design extensible for multiple execution targets later
 
 ---
 
 ## Overview
 
-This system uses Mesh LLM as the inference engine and adds an orchestration layer around it to provide asynchronous, real-time, and scalable distributed LLM inference in on-premises environments.
+This system uses Mesh LLM as the inference engine and builds an orchestration layer around it to provide asynchronous, real-time, and scalable distributed LLM inference in on-premises environments.
 
-Mesh LLM is responsible for distributed inference across multiple GPU nodes, but it does not fully provide the operational capabilities needed in production, such as job management, queueing, streaming control, API exposure, and load control. This system complements those gaps and extends Mesh LLM into a form that is suitable for production use.
+Mesh LLM is responsible for distributed inference across multiple GPU nodes, but it does not fully provide the operational capabilities needed in production, such as job management, queueing, streaming control, API exposure, and load control. This system complements those gaps and extends Mesh LLM into a form suitable for production use.
 
-The orchestration layer is designed to run on Kubernetes as a scalable control platform. GPU resources, meanwhile, are currently treated as fixed nodes, with a structure that can later transition to Kubernetes-based dynamic scaling.
+The orchestration layer is designed to run on Kubernetes as a scalable control platform. At the current stage, the system assumes a single Mesh LLM cluster as the execution target, while leaving room to expand toward multiple execution targets in the future.
 
 ---
 
@@ -35,29 +35,29 @@ The orchestration layer is designed to run on Kubernetes as a scalable control p
 
 ### Build a Practical Local LLM Platform
 
-Provide a platform that integrates multiple GPU servers in laboratories or on-premises environments and can process inference requests from multiple users.
+Provide a platform that integrates multiple GPU servers in laboratories or on-premises environments and can handle inference requests from multiple users.
 
 ---
 
 ### Enable Asynchronous and Real-Time Inference
 
 * Process inference requests as asynchronous jobs
-* Stream progress and results back to clients, even for long-running workloads
+* Stream progress and results even for long-running workloads
 
 ---
 
-### Use GPU Resources Efficiently
+### Use the Inference Platform Efficiently
 
-* Distribute execution across multiple nodes
+* Let Mesh LLM distribute execution internally across multiple nodes
 * Smooth load through queueing
-* Select the most suitable node through the Router
+* Support per-job model selection
 
 ---
 
 ### Ensure Scalability
 
 * The orchestration layer scales horizontally on Kubernetes
-* GPU workers can later support node scaling through Kubernetes
+* The structure should remain extensible for future support of multiple execution targets and router introduction
 
 ---
 
@@ -66,11 +66,11 @@ Provide a platform that integrates multiple GPU servers in laboratories or on-pr
 ### In Scope
 
 * Inference job submission API
-* Asynchronous queueing and retry control
-* Selection of target inference nodes
+* Asynchronous queueing
 * Streaming delivery of inference results
 * Persistence of job state
-* Abstraction of the fixed pool of GPU nodes
+* Dispatching execution requests to a single Mesh LLM cluster
+* Forwarding model-specified inference requests
 
 ---
 
@@ -89,10 +89,10 @@ Provide a platform that integrates multiple GPU servers in laboratories or on-pr
 ### Languages
 
 * Go
-  API Gateway, Router, and job management
+  API Gateway, Job Service, and Execution Service
 
 * Python
-  LLM inference processing
+  Auxiliary processing where needed
 
 ---
 
@@ -105,21 +105,21 @@ Provide a platform that integrates multiple GPU servers in laboratories or on-pr
   Real-time delivery to clients
 
 * gRPC
-  Service-to-service communication with low latency and streaming support
+  Internal communication between orchestration services
 
 ---
 
 ### Inference Backend
 
 * Mesh LLM
-  Distributed inference execution across multiple GPU nodes
+  Distributed inference and model execution within a single cluster
 
 ---
 
 ### Asynchronous Processing
 
 * NATS JetStream
-  Queueing, persistence, and retry control for inference jobs
+  Inference job queueing and asynchronous processing
 
 ---
 
@@ -127,9 +127,6 @@ Provide a platform that integrates multiple GPU servers in laboratories or on-pr
 
 * PostgreSQL
   Persistent storage for job state and history
-
-* Redis
-  Cache, shared state, and lightweight metrics management
 
 ---
 
@@ -139,19 +136,20 @@ Provide a platform that integrates multiple GPU servers in laboratories or on-pr
   Execution and scaling platform for the orchestration layer
 
 * Current state
-  Fixed GPU server pool in a local environment
+  A single Mesh LLM cluster in a local environment
 
 * Future state
-  Kubernetes-based GPU node management and scaling
+  Expansion toward multiple execution targets and Kubernetes-managed infrastructure
 
 ---
 
 ## Expected Use Cases
 
 * Multiple users within a lab submit inference jobs concurrently
-* The system handles not only short single-shot inference, but also long-running generation jobs
+* The system handles not only short one-shot inference, but also long-running generation jobs
 * Users create jobs through an HTTP API and receive progress or partial results over WebSocket
-* Operators manage the state of fixed GPU nodes through the Router and NodeRegistry
+* Users specify a `model` per job, and execution runs on a single Mesh LLM cluster
+* The orchestration layer is internally split into multiple services that communicate over gRPC
 
 ---
 
@@ -163,13 +161,15 @@ Provide a platform that integrates multiple GPU servers in laboratories or on-pr
 Client
   ↓ (HTTP / WebSocket)
 API Gateway (Kubernetes)
+  ↓ (gRPC)
+Job Service (Kubernetes)
+  ↓ (JetStream / PostgreSQL)
+Job / Queue Layer
+  ↓ (gRPC)
+Execution Service (Kubernetes)
   ↓
-Job / Queue Layer (JetStream / Kubernetes)
-  ↓
-Router (Kubernetes)
-  ↓
-Mesh LLM (GPU nodes)
-  ↓ (gRPC / streaming)
+Mesh LLM cluster
+  ↓ (streaming)
 Streaming / Result
   ↓
 Client
@@ -184,22 +184,23 @@ Client
 Components:
 
 * API Gateway
-* Queue / Job Management (JetStream)
-* Router
+* Job Service
+* Execution Service
 * Streaming control
 
 Responsibilities:
 
 * Accept requests and return responses
-* Manage asynchronous processing
-* Select target inference nodes
+* Manage job state and persistence
+* Dispatch execution requests to Mesh LLM
 * Control the end-user experience
 
 Characteristics:
 
-* Runs as Pods on Kubernetes
+* Runs as multiple Pods on Kubernetes
 * Supports horizontal scaling by increasing or decreasing Pods
-* Assumes a stateless design
+* Uses gRPC for internal service-to-service communication
+* Uses a single Mesh LLM cluster as the execution target at the current stage
 
 ---
 
@@ -217,8 +218,9 @@ Responsibilities:
 
 Characteristics:
 
-* Currently runs on fixed GPU nodes
-* Can later move to Kubernetes-managed worker Pods
+* Handles distribution across GPU nodes inside the cluster
+* Executes inference based on the specified model
+* Can later expand to a multi-cluster configuration
 
 ---
 
@@ -226,12 +228,12 @@ Characteristics:
 
 Components:
 
-* GPU nodes
+* Mesh LLM cluster
 * Kubernetes cluster
 
 Responsibilities:
 
-* Provide compute resources
+* Provide the inference execution platform
 * Manage Pod placement and scaling
 
 ---
@@ -241,10 +243,9 @@ Responsibilities:
 | Component | Responsibility |
 | --- | --- |
 | API Gateway | External interface, authentication, and request intake |
-| Queue (JetStream) | Asynchronous processing, persistence, and retry control |
-| Router | Selection of inference nodes and models |
+| Job Service | Job state management, JetStream integration, and persistence |
+| Execution Service | Send inference requests to Mesh LLM and receive results |
 | Mesh LLM | Execution of distributed inference |
-| Worker | GPU-side inference processing |
 
 ---
 
@@ -252,7 +253,7 @@ Responsibilities:
 
 #### 1. Scaling the Orchestration Layer
 
-* Deploy API Gateway, Router, Queue, and related services as Pods
+* Deploy API Gateway, Job Service, and Execution Service as Pods
 * Scale horizontally using mechanisms such as HPA
 
 ---
@@ -264,11 +265,11 @@ Responsibilities:
 
 ---
 
-#### 3. Future GPU Scaling
+#### 3. Future Expansion of Execution Targets
 
-* Adding GPU nodes
-* Scheduling worker Pods
-* Scaling nodes through Cluster Autoscaler
+* Support multiple Mesh LLM clusters
+* Add new execution targets
+* Introduce a Router when needed
 
 ---
 
@@ -282,16 +283,16 @@ Mesh LLM is not exposed directly to external users; it is wrapped by the orchest
 
 #### 2. Separate GPU Resource Management
 
-GPU nodes are abstracted as compute providers.
+GPU node management and distributed execution are the responsibility of Mesh LLM.
 
-* Current: fixed nodes
-* Future: Kubernetes
+* The orchestrator does not directly handle GPU-node-level details
+* The orchestrator treats a single Mesh LLM cluster as its execution target
 
 ---
 
-#### 3. Abstract Node Discovery Through NodeRegistry
+#### 3. Forward Model Selection Transparently
 
-Node information is obtained through an abstract interface.
+The per-job `model` specification is forwarded by the orchestrator to Mesh LLM as-is.
 
 ---
 
@@ -303,14 +304,14 @@ All inference requests go through JetStream.
 
 #### 5. Separation of Responsibilities
 
-Each component has a single responsibility.
+Each internal service has a single responsibility, and services communicate over gRPC.
 
 ---
 
 #### 6. Design for Scalability from the Start
 
 * The orchestration layer scales on Kubernetes
-* GPU workers can later scale on Kubernetes
+* The structure should leave room for future support of multiple execution targets and Router introduction
 
 ---
 
@@ -319,10 +320,10 @@ Each component has a single responsibility.
 | Item | Current | Future |
 | --- | --- | --- |
 | Orchestration Layer | Kubernetes | Kubernetes |
-| GPU node management | Fixed | Kubernetes |
-| Node discovery | Static | Dynamic (API / Service Discovery) |
+| Execution target configuration | Single Mesh LLM cluster | Multiple execution targets |
+| Model selection | Forward the `model` field as-is | Extend through policy or Router |
 | CPU-side scaling | Kubernetes | Kubernetes |
-| GPU-side scaling | None | Kubernetes |
+| Execution-side scaling | Depends on Mesh LLM | Expand to multiple execution targets or Kubernetes-managed infrastructure |
 
 ---
 
@@ -330,4 +331,4 @@ Each component has a single responsibility.
 
 This system uses Mesh LLM as the inference engine and extends it into an operationally viable platform for distributed LLM inference by introducing an orchestration layer running on Kubernetes.
 
-From the outset, the orchestration layer is intended to run in a scalable way on Kubernetes, while GPU resources start as fixed nodes and remain structured so they can later transition to Kubernetes-based dynamic scaling.
+At the current stage, the system assumes a single Mesh LLM cluster and places job management, streaming, cancellation, and persistence on the orchestrator side. The design remains extensible for future support of multiple execution targets and Router introduction.
