@@ -17,7 +17,7 @@ Mesh LLM を実運用向けに扱うための、オンプレミス分散 LLM 推
 * Mesh LLM を外部公開せず、運用に必要な制御層を追加する
 * 複数ユーザーからの推論要求を非同期ジョブとして安全に処理する
 * 長時間推論をストリーミングで返却し、利用者体験を維持する
-* 現在の固定 GPU ノード構成から、将来的な Kubernetes 管理へ移行しやすい構造にする
+* 単一の Mesh LLM cluster を前提に、将来的な複数実行先対応へ拡張しやすい構造にする
 
 ---
 
@@ -46,18 +46,18 @@ Mesh LLMは複数GPUノード間での推論分散を担うが、実運用に必
 
 ---
 
-### GPUリソースの効率的利用
+### 推論基盤の効率的利用
 
-* 複数ノードへの分散実行
+* Mesh LLM 内部での複数ノード分散実行
 * キューによる負荷平準化
-* Routerによる最適ノード選択
+* ジョブ単位のモデル指定
 
 ---
 
 ### スケーラビリティの確保
 
 * オーケストレーションレイヤはKubernetesによって水平スケール
-* GPU Workerは将来的にKubernetesによるノードスケーリングへ対応
+* 将来的に複数実行先対応やRouter導入へ拡張可能な構造とする
 
 ---
 
@@ -66,11 +66,11 @@ Mesh LLMは複数GPUノード間での推論分散を担うが、実運用に必
 ### 対象
 
 * 推論ジョブ受付 API
-* 非同期キューイングと再試行制御
-* 推論先ノードの選択
+* 非同期キューイング
 * 推論結果のストリーミング返却
 * ジョブ状態の永続化
-* 固定 GPU ノード群の抽象化
+* 単一 Mesh LLM cluster への実行依頼
+* モデル指定付き推論リクエストの中継
 
 ---
 
@@ -89,10 +89,10 @@ Mesh LLMは複数GPUノード間での推論分散を担うが、実運用に必
 ### 言語
 
 * Go
-  API Gateway、Router、ジョブ管理
+  API Gateway、Job Service、Execution Service
 
 * Python
-  LLM推論処理
+  必要に応じた補助処理
 
 ---
 
@@ -105,21 +105,19 @@ Mesh LLMは複数GPUノード間での推論分散を担うが、実運用に必
   クライアントへのリアルタイム配信
 
 * gRPC
-  サービス間通信（低レイテンシ・ストリーミング対応）
-
----
+  オーケストレーション内部サービス間通信
 
 ### 推論基盤
 
 * Mesh LLM
-  複数GPUノードにおける分散推論の実行
+  単一 cluster 内での分散推論およびモデル実行
 
 ---
 
 ### 非同期処理
 
 * NATS JetStream
-  推論ジョブのキューイング、永続化、再試行制御
+  推論ジョブのキューイングおよび非同期処理
 
 ---
 
@@ -128,21 +126,16 @@ Mesh LLMは複数GPUノード間での推論分散を担うが、実運用に必
 * PostgreSQL
   ジョブ状態および履歴の永続化
 
-* Redis
-  キャッシュ、状態共有、軽量メトリクス管理
-
----
-
 ### インフラ
 
 * Kubernetes
   オーケストレーションレイヤの実行基盤およびスケーリング管理
 
 * 現在
-  固定GPUサーバー群（ローカル環境）
+  単一の Mesh LLM cluster（ローカル環境）
 
 * 将来
-  KubernetesによるGPUノード管理およびスケーリング
+  複数実行先や Kubernetes 管理への拡張
 
 ---
 
@@ -151,7 +144,8 @@ Mesh LLMは複数GPUノード間での推論分散を担うが、実運用に必
 * 研究室内の複数利用者が、同時に推論ジョブを投入する
 * 単発の短い推論だけでなく、長時間の生成ジョブも扱う
 * 利用者は HTTP API でジョブを作成し、WebSocket で進捗や部分結果を受け取る
-* 運用者は Router と NodeRegistry を通じて、固定 GPU ノードの状態を制御する
+* 利用者は `model` を指定して推論ジョブを投入し、単一の Mesh LLM cluster で実行する
+* オーケストレーション層は内部的に複数サービスへ分割し、gRPC で連携する
 
 ---
 
@@ -163,13 +157,15 @@ Mesh LLMは複数GPUノード間での推論分散を担うが、実運用に必
 Client
   ↓ (HTTP / WebSocket)
 API Gateway（Kubernetes）
+  ↓ (gRPC)
+Job Service（Kubernetes）
+  ↓ (JetStream / PostgreSQL)
+Job / Queue Layer
+  ↓ (gRPC)
+Execution Service（Kubernetes）
   ↓
-Job / Queue Layer（JetStream / Kubernetes）
-  ↓
-Router（Kubernetes）
-  ↓
-Mesh LLM（GPUノード）
-  ↓ (gRPC / streaming)
+Mesh LLM cluster
+  ↓ (streaming)
 Streaming / Result
   ↓
 Client
@@ -184,22 +180,23 @@ Client
 構成要素：
 
 * API Gateway
-* Queue / Job管理（JetStream）
-* Router
+* Job Service
+* Execution Service
 * ストリーミング制御
 
 役割：
 
 * リクエスト受付およびレスポンス返却
-* 非同期処理の管理
-* 推論先ノードの選択
+* ジョブ状態管理と永続化
+* Mesh LLM への実行依頼
 * ユーザー体験の制御
 
 特徴：
 
-* Kubernetes上のPodとして実行
+* Kubernetes上の複数Podとして実行
 * 水平スケーリング（Podの増減）に対応
-* ステートレス設計を前提とする
+* 内部サービス間通信に gRPC を用いる
+* 現時点では単一の Mesh LLM cluster を実行先とする
 
 ---
 
@@ -217,8 +214,9 @@ Client
 
 特徴：
 
-* 現在は固定GPUノード上で動作
-* 将来的にKubernetes上のWorker Podへ移行可能
+* cluster 内部で GPU ノード間の分散を担う
+* モデル指定に基づく推論実行を担う
+* 将来的に複数 cluster 構成へ拡張可能
 
 ---
 
@@ -226,12 +224,12 @@ Client
 
 構成要素：
 
-* GPUノード
+* Mesh LLM cluster
 * Kubernetesクラスタ
 
 役割：
 
-* 計算資源の提供
+* 推論実行基盤の提供
 * Podの配置およびスケーリング管理
 
 ---
@@ -241,10 +239,9 @@ Client
 | コンポーネント          | 役割                    |
 | ---------------- | --------------------- |
 | API Gateway      | 外部インターフェース、認証、リクエスト受付 |
-| Queue（JetStream） | 非同期処理、永続化、再試行制御       |
-| Router           | 推論先ノードおよびモデルの選択       |
+| Job Service      | ジョブ状態管理、JetStream連携、永続化 |
+| Execution Service | Mesh LLM への推論要求送信と結果受信 |
 | Mesh LLM         | 分散推論の実行               |
-| Worker           | GPU上での推論処理            |
 
 ---
 
@@ -252,7 +249,7 @@ Client
 
 #### 1. Orchestration Layerのスケーリング
 
-* API Gateway、Router、QueueなどをPodとして配置
+* API Gateway、Job Service、Execution Service をPodとして配置
 * HPAなどによる水平スケーリング
 
 ---
@@ -264,11 +261,11 @@ Client
 
 ---
 
-#### 3. 将来的なGPUスケーリング
+#### 3. 将来的な実行先拡張
 
-* GPUノードの追加
-* Worker Podのスケジューリング
-* Cluster Autoscalerによるノードスケール
+* 複数 Mesh LLM cluster への対応
+* 実行先の追加
+* 必要に応じた Router の導入
 
 ---
 
@@ -282,35 +279,35 @@ Mesh LLMを直接外部公開せず、オーケストレーション層でラッ
 
 #### 2. GPUリソース管理の分離
 
-GPUノードはCompute Providerとして抽象化する。
+GPUノードの管理と分散実行は Mesh LLM 側の責務とする。
 
-* 現在：固定ノード
-* 将来：Kubernetes
+* orchestrator は GPU ノード詳細を直接扱わない
+* orchestrator は単一の Mesh LLM cluster を実行先として扱う
 
 ---
 
-#### 3. NodeRegistryによる抽象化
+#### 3. model 指定の透過的な中継
 
-ノード情報は抽象インターフェース経由で取得する。
+ジョブごとの `model` 指定は orchestrator がそのまま Mesh LLM に渡す。
 
 ---
 
 #### 4. 非同期ファースト設計
 
-すべての推論リクエストはJetStreamを経由する。
+すべての推論リクエストは JetStream を経由する。
 
 ---
 
 #### 5. 責務分離
 
-各コンポーネントは単一責務を持つ。
+各内部サービスは単一責務を持ち、サービス間は gRPC で連携する。
 
 ---
 
 #### 6. スケーラビリティ前提設計
 
 * Orchestration LayerはKubernetesでスケール
-* GPU Workerは将来的にKubernetesでスケール
+* 将来的に複数実行先や Router を追加できる構造を残す
 
 ---
 
@@ -319,10 +316,10 @@ GPUノードはCompute Providerとして抽象化する。
 | 項目                  | 現在         | 将来                          |
 | ------------------- | ---------- | --------------------------- |
 | Orchestration Layer | Kubernetes | Kubernetes                  |
-| GPUノード管理            | 固定         | Kubernetes                  |
-| ノード取得               | 静的         | 動的（API / Service Discovery） |
+| 実行先構成               | 単一 Mesh LLM cluster | 複数実行先対応               |
+| モデル選択               | `model` 指定をそのまま転送 | ポリシーや Router による拡張 |
 | スケーリング（CPU系）        | Kubernetes | Kubernetes                  |
-| スケーリング（GPU）         | なし         | Kubernetes                  |
+| スケーリング（実行系）         | Mesh LLM 側に依存 | 複数実行先やKubernetes管理へ拡張 |
 
 ---
 
@@ -330,4 +327,4 @@ GPUノードはCompute Providerとして抽象化する。
 
 本システムは、Mesh LLMを推論エンジンとして利用し、その外側にKubernetes上で動作するオーケストレーションレイヤを構築することで、分散LLM推論を実運用可能な形に拡張する。
 
-オーケストレーションレイヤは初期段階からKubernetesでスケーラブルに運用し、GPUリソースについては固定ノードから開始しつつ、将来的にKubernetesによる動的スケーリングへ移行可能な設計とする。
+現時点では単一の Mesh LLM cluster を前提とし、ジョブ管理、ストリーミング、キャンセル、永続化を orchestrator 側で担う。将来的には複数実行先対応や Router の導入へ拡張可能な設計とする。
