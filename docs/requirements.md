@@ -1,188 +1,264 @@
 # requirements
 
-## システム機能
+この文書は、Redis ベースの非同期 HTTP 実行基盤としての実装要件を整理するためのものである。
+
+本システムは Mesh LLM を主対象とするが、透過性を保つことで任意の HTTP API に対しても互換的に適用できる構造を目指す。
+
+---
+
+## 1. システム機能
 
 ### 利用者向け機能
 
-* API 経由で推論ジョブを受け付ける
-* 受け付けたジョブに一意な ID を発行する
-* クライアントがジョブの現在状態を取得できるようにする
-* 状態変化と部分出力をクライアントへストリーミング配信する
-* 推論完了時に最終結果を返却する
-* `queued`、`running` のジョブをキャンセルできるようにする
+* HTTP リクエストをジョブとして受け付ける
+* 受け付けたジョブに一意な `job_id` を発行する
+* クライアントが `job_id` を用いてジョブ状態を問い合わせできるようにする
+* 完了したジョブのレスポンスを取得できるようにする
+* 将来的に、ジョブ単位の逐次レスポンス配信を行える構造を残す
 
 ---
 
 ### 内部制御機能
 
-* 受け付けたジョブを非同期キューへ投入する
-* 各ジョブの現在状態を管理する
-* 推論ジョブを単一の `Mesh LLM cluster` に転送する
-* 失敗したジョブを `failed` として記録する
-* ジョブ履歴を永続化する
-* 完了後の最終結果を永続化する
+* 受け付けたリクエストをそのまま保存する
+* ジョブ状態を Redis 上で管理する
+* Queue へ `job_id` を投入する
+* Worker が `job_id` を取り出して HTTP 実行する
+* レスポンスを保存する
+* 完了または失敗状態を記録する
+* ロックによって同一ジョブの重複実行を抑制する
 
 ---
 
-## ジョブ状態モデル
+## 2. 透過性要件
+
+* リクエスト本文は内容を解釈せず、バイト列として扱う
+* レスポンス本文も内容を解釈せず、バイト列として扱う
+* JSON パースやフィールド変換を前提としない
+* HTTP ヘッダも透過的に扱う
+* 特定 API に依存したリクエスト変換やレスポンス整形を行わない
+
+---
+
+## 3. ジョブ状態モデル
 
 ### ジョブ状態
 
 * `queued`
 * `running`
-* `succeeded`
+* `completed`
 * `failed`
-* `cancelled`
 
 ---
 
 ### 各状態の意味
 
-* `queued`: ジョブは受け付け済みでキューに投入されているが、まだ実行開始されていない。
-* `running`: 推論を実行中である。
-* `succeeded`: ジョブが正常終了した。
-* `failed`: ジョブがエラーにより終了した。
-* `cancelled`: ジョブがキャンセルされて終了した。
+* `queued`: ジョブは受け付け済みであり、まだ実行開始されていない
+* `running`: Worker によって実行中である
+* `completed`: 実行が正常に終了し、レスポンスが保存済みである
+* `failed`: 実行が失敗し、正常なレスポンスを返せない
 
 ---
 
 ### 終端状態
 
-* `succeeded`
+* `completed`
 * `failed`
-* `cancelled`
 
 ---
 
 ### 許可する状態遷移
 
-* `queued -> cancelled`
 * `queued -> running`
-* `running -> succeeded`
+* `running -> completed`
 * `running -> failed`
-* `running -> cancelled`
+* `running -> queued`
 
 ---
 
-### status 更新ルール
+### 状態更新ルール
 
-* `queued`: ジョブ受付と永続化が完了し、非同期処理対象として登録された時点で設定する。
-* `running`: `MeshLLMClient` による推論実行が開始した時点で設定する。
-* `succeeded`: `MeshLLMClient` から `completed` を受け取った時点で設定する。
-* `failed`: `MeshLLMClient` から `failed` を受け取った時点、または実行開始前後を問わず回復不能な実行エラーが確定した時点で設定する。
-* `cancelled`: `queued` または `running` 状態のジョブに対するキャンセル要求を受理した時点で設定する。
-
----
-
-## ストリーミング要件
-
-### ストリームで配信する内容
-
-ストリームでは以下を配信する。
-
-* 状態変化イベント
-* 部分出力
-* 最終結果を表す終端イベント
-* 失敗を表す終端イベント
-* キャンセルを表す終端イベント
-
-`cancelled` になったジョブについては、それ以降に `Mesh LLM` 側から結果や出力が届いても orchestrator は採用しない。
-
-現時点では以下は扱わない。
-
-* 進捗率
-* 推定残り時間
-* GPU 使用率
-* 内部リトライ情報
+* `queued`: ジョブ作成時に設定する
+* `running`: Worker がロック取得後、実行開始時に設定する
+* `completed`: レスポンス保存後に設定する
+* `failed`: 実行失敗時に設定する
+* `running -> queued`: stale と判断したジョブを再投入する場合にのみ設定する
 
 ---
 
-### イベント種別
+## 4. Redis データモデル
 
-* `status_changed`
-* `output_chunk`
-* `completed`
-* `failed`
-* `cancelled`
+### ジョブ
+
+キー例:
+
+```text
+job:{id}
+```
+
+最低限保持する項目:
+
+* `status`
+* `request`
+* `response`
+* `started_at`
+* `retry_count`
 
 ---
 
-## キャンセル要件
+### ロック
 
-* `queued` 状態のジョブはキャンセル可能とする。
-* `running` 状態のジョブはキャンセル要求を受け付ける。
-* `succeeded`、`failed`、`cancelled` 状態のジョブはキャンセル不可とする。
-* `queued` または `running` 状態のジョブに対するキャンセル要求を受理した場合、状態は即座に `cancelled` とする。
-* `cancelled` になった後に `Mesh LLM` 側から出力や完了通知が届いても、それらは無視する。
-* キャンセル成立時は、ストリーム上でも終端イベントとして通知する。
+キー例:
+
+```text
+lock:job:{id}
+```
+
+要件:
+
+* `SETNX` で取得する
+* TTL を持つ
+* 最初に取得した Worker のみが実行可能とする
 
 ---
 
-## Job の最小データモデル
+### Queue
 
-### 保持する項目
+キー例:
+
+```text
+queue:jobs
+```
+
+要件:
+
+* Redis List を用いる
+* 値は `job_id` とする
+
+---
+
+## 5. Queue モデル
+
+* Queue は配送手段であり、唯一の正ではない
+* Queue の重複配信を許容する
+* Queue の順序崩れを許容する
+* Queue の信頼性は Redis 上の状態管理で補完する
+
+---
+
+## 6. 実行フロー
+
+### 6.1 ジョブ作成
+
+1. クライアントが HTTP リクエストを送信する
+2. Orchestrator が `job_id` を生成する
+3. リクエストをそのまま保存する
+4. `status = queued` を設定する
+5. Queue に `job_id` を投入する
+6. クライアントへ `job_id` を返却する
+
+---
+
+### 6.2 ジョブ実行
+
+1. Worker が Queue から `job_id` を取得する
+2. `SETNX` によりロックを取得する
+3. ロック取得失敗時はそのジョブをスキップする
+4. `status = running` を設定する
+5. 保存済みリクエストを取得する
+6. 外部 API に透過的にリクエスト送信する
+
+---
+
+### 6.3 完了処理
+
+1. レスポンスを受け取る
+2. レスポンスを保存する
+3. `status = completed` を設定する
+
+失敗時は `status = failed` を設定する。
+
+---
+
+### 6.4 結果取得
+
+1. クライアントが `job_id` を指定して問い合わせる
+2. Redis からジョブ状態を取得する
+3. `completed` の場合はレスポンスを返す
+
+---
+
+## 7. 排他制御
+
+排他制御は Redis ロックによって行う。
+
+```text
+SETNX(lock:job:{id})
+```
+
+要件:
+
+* 同一ジョブを複数 Worker が同時に確定処理しないこと
+* ロックは TTL により自動解放可能であること
+
+---
+
+## 8. 整合性モデル
+
+### at-least-once
+
+* 同一ジョブが複数回実行される可能性を許容する
+
+---
+
+### first-writer-wins
+
+* 最初に `completed` を確定した結果を有効とする
+* 後続の結果は無視する
+
+---
+
+## 9. API 要件
+
+### 基本方針
+
+* クライアントは対象 HTTP API に対してそのままリクエストを送る
+* システムはそのリクエストを内部でジョブ化して非同期実行する
+* 外部 API として専用のジョブ作成エンドポイントは前提にしない
+
+---
+
+### 同期風レスポンスと非同期フォールバック
+
+* API Gateway または Orchestrator は、ジョブ投入後に短時間だけ完了通知を待つ
+* その待機時間内に完了した場合は、通常の同期 HTTP レスポンスとして結果を返す
+* 待機時間を超えた場合は、ジョブ継続中として非同期取得へフォールバックする
+
+---
+
+### 非同期フォールバック時のレスポンス
+
+待機時間内に完了しなかった場合、少なくとも以下を返せるようにする。
 
 * `job_id`
-* `model`
-* `messages`
-* `generation_params`
 * `status`
-* `final_result`
-* `error_message`
-* `created_at`
-* `updated_at`
+
+必要に応じて以下も返せるようにする。
+
+* `status_url`
+* `result_url`
 
 ---
 
-### 各項目の意味
+### ジョブ状態取得 API
 
-* `job_id`: ジョブ識別子
-* `model`: 利用するモデル名
-* `messages`: 推論入力
-* `generation_params`: 生成パラメータ
-* `status`: 現在のジョブ状態
-* `final_result`: 正常終了時の最終出力全文
-* `error_message`: 失敗時の理由
-* `created_at`: 作成時刻
-* `updated_at`: 更新時刻
+例:
 
----
-
-### 現時点の前提
-
-* `final_result` は nullable とする。
-* `error_message` は nullable とする。
-* `messages` は現時点ではそのまま保持する。
-
----
-
-## API の最小セット
-
-### API 一覧
-
-* `POST /jobs`
 * `GET /jobs/{job_id}`
-* `POST /jobs/{job_id}/cancel`
-* `GET /jobs/{job_id}/stream`
 
----
+役割:
 
-### 各 API の役割
-
-* `POST /jobs`: 推論ジョブを作成する。
-* `GET /jobs/{job_id}`: ジョブの現在状態と結果を取得する。
-* `POST /jobs/{job_id}/cancel`: ジョブに対するキャンセル要求を送る。
-* `GET /jobs/{job_id}/stream`: 状態変化イベントと出力イベントを受け取る。
-
----
-
-### `POST /jobs`
-
-入力:
-
-* `model`
-* `messages`
-* `generation_params`
+* ジョブ状態を返す
 
 出力:
 
@@ -191,123 +267,68 @@
 
 ---
 
-### `GET /jobs/{job_id}`
+### ジョブ結果取得 API
 
-出力:
+例:
 
-* `job_id`
-* `model`
-* `status`
-* `final_result`
-* `error_message`
-* `created_at`
-* `updated_at`
+* `GET /jobs/{job_id}/response`
 
-現時点の前提:
+役割:
 
-* `messages` は返さない。
-* `final_result` はサイズが大きくなり得るが、現時点ではこの API で返す。
-* 将来的に必要であれば、結果取得用 API を分離できる構造を残す。
-
----
-
-### `POST /jobs/{job_id}/cancel`
+* 完了済みジョブのレスポンスを返す
 
 出力:
 
 * `job_id`
 * `status`
-
-返り値のルール:
-
-* `queued` または `running` のジョブに対するキャンセル要求を受理した場合は `status=cancelled` を返す。
-* すでに `succeeded`、`failed`、`cancelled` の場合は、その時点の状態をそのまま返す。
+* `response`
 
 ---
 
-### `GET /jobs/{job_id}/stream`
+## 10. ストリーミング拡張
 
-出力イベント:
+将来的に以下を行える構造を残す。
 
-* `status_changed`
-* `output_chunk`
-* `completed`
-* `failed`
-* `cancelled`
+* Executor がレスポンスを逐次 Pub/Sub で配信する
+* Orchestrator が `job_id` 単位で購読する
+* API Gateway が SSE でクライアントへ転送する
 
 ---
 
-## 実行先との接続
+## 11. stale 回収と再実行
 
-### 現在の前提
-
-* orchestrator は単一の `Mesh LLM cluster` を実行先として扱う。
-* ジョブごとの `model` 指定を `Mesh LLM` に渡すことで、利用モデルを切り替える。
-* `Mesh LLM cluster` 内部の GPU ノード構成、モデル配置、分散実行方式は `Mesh LLM` の責務とする。
+* `running` 状態のまま一定時間を超えて停滞したジョブは stale とみなす
+* stale ジョブは必要に応じて `queued` に戻して再実行できるようにする
+* stale 判定の閾値は設定可能とする
 
 ---
 
-### MeshLLMClient の責務
+## 12. TTL ポリシー
 
-* `MeshLLMClient` は orchestrator から見た実行依頼の窓口とする。
-* `MeshLLMClient` は単一の `Mesh LLM cluster` への推論要求送信を担当する。
-* `MeshLLMClient` は `model` を含むジョブ要求を `Mesh LLM` に渡す。
-* `MeshLLMClient` は推論中のストリーム結果を受け取り、orchestrator 側へ返す。
-* `MeshLLMClient` はキャンセル要求を `Mesh LLM` 側へ伝える。
-
-Interface:
-
-* `StartInference(request) -> event stream`
-* `CancelInference(job_id) -> result`
-
-`StartInference` の入力:
-
-* `job_id`
-* `model`
-* `messages`
-* `generation_params`
-
-`StartInference` の出力イベント:
-
-* `output_chunk { type, text }`
-* `completed { type, final_text }`
-* `failed { type, error_message }`
-
-`CancelInference` の入力:
-
-* `job_id`
-
-`CancelInference` の出力:
-
-* `accepted` または即時エラー
+* `completed` ジョブは一定時間後に削除する
+* `failed` ジョブも一定時間後に削除する
+* TTL 設定は将来的に変更可能であること
 
 ---
 
-### `model` の扱い
+## 13. 将来拡張
 
-* ジョブ作成時に `model` は必須項目とする。
-* orchestrator は `model` 名を過度に解釈せず、基本的に透過的に扱う。
-* orchestrator は受け取った `model` を `Mesh LLM` にそのまま渡す。
-* 利用可能なモデル一覧の情報源は `Mesh LLM` 側に置く。
-* orchestrator は将来的にモデル一覧を参照または中継できる構造を持てるようにするが、現時点では独自のモデル台帳を持たない。
-* `model` の受付時検証は、現時点では空でないことの確認を中心とする。
-* `Mesh LLM` が受け付けない `model` が指定された場合は、実行時エラーとして `failed` を記録する。
-* 現時点では default model は持たず、利用者が毎回 `model` を指定する前提とする。
+以下は現時点の最小要件には含めないが、拡張余地を残す。
 
----
-
-### 将来拡張に向けた前提
-
-* 現時点では独立した `Router` は設けない。
-* 将来的に複数の実行先を扱う必要が生じた場合は、`MeshLLMClient` の前段に `Router` を追加できる構造とする。
-* 将来的な `Router` は、複数の `Mesh LLM cluster` や異種推論バックエンドへの振り分け責務を担う。
+* retry 制御
+* エラー分類
+* タイムアウト制御
+* メトリクス収集
+* Queue の差し替え
+* Kubernetes スケーリング
+* Pub/Sub による逐次レスポンス配信
 
 ---
 
-## 将来拡張を前提とする項目
+## 14. 設計原則
 
-以下は現時点の機能要件には含めないが、将来追加しやすい設計を前提とする。
-
-* 認証は現時点では実装しないが、後から追加しやすい構造を残す。
-* リトライは現時点の機能要件には含めないが、Queue と Job の設計は将来的なリトライ追加を妨げないようにする。
-* 実行先は現時点では単一の `Mesh LLM cluster` とするが、将来的に複数実行先へ拡張しやすい構造を残す。
+* Queue を信用しない
+* Redis を唯一の真実として扱う
+* 実行制御はロックで行う
+* レスポンスは Queue に戻さない
+* 透過性を維持する
