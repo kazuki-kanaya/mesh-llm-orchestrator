@@ -5,21 +5,22 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestrator/ports"
-	"github.com/redis/go-redis/v9"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 type RedisJobSubscriber struct {
-	rdb *redis.Client
+	rdb *goredis.Client
 }
 
-func NewRedisJobSubscriber(rdb *redis.Client) *RedisJobSubscriber {
+func NewRedisJobSubscriber(rdb *goredis.Client) *RedisJobSubscriber {
 	return &RedisJobSubscriber{
 		rdb: rdb,
 	}
 }
 
 func (s *RedisJobSubscriber) Subscribe(ctx context.Context, jobID uuid.UUID) (ports.Subscription, error) {
-	sub := s.rdb.Subscribe(ctx, jobResultChannel(jobID))
+	sub := s.rdb.Subscribe(ctx, redis.JobResultChannel(jobID))
 	if _, err := sub.Receive(ctx); err != nil {
 		_ = sub.Close()
 		return nil, err
@@ -55,7 +56,7 @@ func (s *RedisJobSubscriber) Subscribe(ctx context.Context, jobID uuid.UUID) (po
 }
 
 type RedisJobSubscription struct {
-	sub *redis.PubSub
+	sub *goredis.PubSub
 	ch  chan struct{}
 }
 
@@ -65,10 +66,6 @@ func (s *RedisJobSubscription) Channel() <-chan struct{} {
 
 func (s *RedisJobSubscription) Close() error {
 	return s.sub.Close()
-}
-
-func jobResultChannel(jobID uuid.UUID) string {
-	return "result:" + jobID.String()
 }
 
 var _ ports.JobSubscriber = (*RedisJobSubscriber)(nil)

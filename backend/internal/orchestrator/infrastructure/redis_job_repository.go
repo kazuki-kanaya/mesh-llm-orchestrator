@@ -9,14 +9,15 @@ import (
 	"github.com/google/uuid"
 	jobdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestrator/ports"
-	"github.com/redis/go-redis/v9"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 type RedisJobRepository struct {
-	rdb *redis.Client
+	rdb *goredis.Client
 }
 
-func NewRedisJobRepository(rdb *redis.Client) *RedisJobRepository {
+func NewRedisJobRepository(rdb *goredis.Client) *RedisJobRepository {
 	return &RedisJobRepository{
 		rdb: rdb,
 	}
@@ -28,7 +29,7 @@ func (repo *RedisJobRepository) Create(ctx context.Context, job *jobdomain.Job) 
 		return err
 	}
 
-	return repo.rdb.HSet(ctx, jobKey(job.ID), map[string]any{
+	return repo.rdb.HSet(ctx, redis.JobKey(job.ID), map[string]any{
 		"status":      job.Status,
 		"request":     requestBytes,
 		"retry_count": job.RetryCount,
@@ -36,7 +37,7 @@ func (repo *RedisJobRepository) Create(ctx context.Context, job *jobdomain.Job) 
 }
 
 func (repo *RedisJobRepository) Get(ctx context.Context, jobID uuid.UUID) (*jobdomain.Job, error) {
-	values, err := repo.rdb.HGetAll(ctx, jobKey(jobID)).Result()
+	values, err := repo.rdb.HGetAll(ctx, redis.JobKey(jobID)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -55,17 +56,23 @@ func (repo *RedisJobRepository) Get(ctx context.Context, jobID uuid.UUID) (*jobd
 		return nil, err
 	}
 
+	var resp *jobdomain.HTTPResponse
+	if rawResponse := values["response"]; rawResponse != "" {
+		var decoded jobdomain.HTTPResponse
+		if err := json.Unmarshal([]byte(rawResponse), &decoded); err != nil {
+			return nil, err
+		}
+		resp = &decoded
+	}
+
 	job := &jobdomain.Job{
 		ID:         jobID,
 		Status:     jobdomain.Status(values["status"]),
 		Request:    req,
+		Response:   resp,
 		RetryCount: retryCount,
 	}
 	return job, nil
-}
-
-func jobKey(jobID uuid.UUID) string {
-	return "job:" + jobID.String()
 }
 
 var _ ports.JobRepository = (*RedisJobRepository)(nil)
