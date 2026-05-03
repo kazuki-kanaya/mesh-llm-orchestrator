@@ -8,6 +8,6 @@ import (
 )
 
 type JobRepository interface {
-	Create(ctx context.Context, jobID uuid.UUID, req []byte) error
+	Create(ctx context.Context, job *jobdomain.Job) error
 	Get(ctx context.Context, jobID uuid.UUID) (*jobdomain.Job, error)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	jobdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
 )
 
@@ -19,10 +20,16 @@ func NewCreateJobUseCase(repo ports.JobRepository, queue ports.JobQueue) *Create
 	}
 }
 
-func (uc *CreateJobUseCase) Execute(ctx context.Context, req []byte) (uuid.UUID, error) {
+func (uc *CreateJobUseCase) Execute(ctx context.Context, req jobdomain.HTTPRequest) (uuid.UUID, error) {
 	jobID := uuid.New()
+	job := &jobdomain.Job{
+		ID:         jobID,
+		Status:     jobdomain.StatusQueued,
+		Request:    req,
+		RetryCount: 0,
+	}
 
-	if err := uc.repo.Create(ctx, jobID, req); err != nil {
+	if err := uc.repo.Create(ctx, job); err != nil {
 		return uuid.Nil, err
 	}
 
