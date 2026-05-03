@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestrator/ports"
 	"github.com/redis/go-redis/v9"
 )
 

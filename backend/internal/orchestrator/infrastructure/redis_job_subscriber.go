@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestrator/ports"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -30,15 +30,21 @@ func (s *RedisJobSubscriber) Subscribe(ctx context.Context, jobID uuid.UUID) (po
 	go func() {
 		defer close(ch)
 
-		select {
-		case _, ok := <-sub.Channel():
-			if !ok {
+		for {
+			select {
+			case _, ok := <-sub.Channel():
+				if !ok {
+					return
+				}
+
+				select {
+				case ch <- struct{}{}:
+				default:
+				}
+
+			case <-ctx.Done():
 				return
 			}
-			ch <- struct{}{}
-
-		case <-ctx.Done():
-			return
 		}
 	}()
 

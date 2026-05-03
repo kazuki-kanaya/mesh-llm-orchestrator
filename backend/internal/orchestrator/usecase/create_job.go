@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	jobdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestrator/ports"
 )
 
 type CreateJobUseCase struct {

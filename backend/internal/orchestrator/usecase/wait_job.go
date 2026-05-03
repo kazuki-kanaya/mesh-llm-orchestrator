@@ -2,14 +2,11 @@ package usecase
 
 import (
 	"context"
-	"errors"
 
 	"github.com/google/uuid"
 	jobdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestrator/ports"
 )
-
-var ErrJobNotTerminal = errors.New("job is not terminal")
 
 type WaitJobUseCase struct {
 	repo ports.JobRepository
@@ -39,20 +36,20 @@ func (uc *WaitJobUseCase) Execute(ctx context.Context, jobID uuid.UUID) (*jobdom
 		return job.Response, nil
 	}
 
-	select {
-	case <-sub.Channel():
-		job, err := uc.repo.Get(ctx, jobID)
-		if err != nil {
-			return nil, err
+	for {
+		select {
+		case <-sub.Channel():
+			job, err := uc.repo.Get(ctx, jobID)
+			if err != nil {
+				return nil, err
+			}
+
+			if job.Status.IsTerminal() {
+				return job.Response, nil
+			}
+
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
-
-		if job.Status.IsTerminal() {
-			return job.Response, nil
-		}
-
-		return nil, ErrJobNotTerminal
-
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 }
