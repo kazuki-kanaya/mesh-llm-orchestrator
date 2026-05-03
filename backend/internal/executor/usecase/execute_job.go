@@ -2,10 +2,13 @@ package usecase
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/executor/ports"
 )
+
+var ErrNilHTTPResponse = errors.New("http client returned nil response")
 
 type ExecuteJobUseCase struct {
 	repo   ports.JobRepository
@@ -39,12 +42,21 @@ func (uc *ExecuteJobUseCase) Execute(ctx context.Context) error {
 
 	job, err := uc.repo.Get(ctx, jobID)
 	if err != nil {
-		return uc.failAndPublish(ctx, jobID)
+		if failErr := uc.failAndPublish(ctx, jobID); failErr != nil {
+			return failErr
+		}
+		return err
 	}
 
 	resp, err := uc.client.Do(ctx, job.Request)
-	if resp == nil || err != nil {
-		return uc.failAndPublish(ctx, jobID)
+	if resp == nil {
+		if failErr := uc.failAndPublish(ctx, jobID); failErr != nil {
+			return failErr
+		}
+		if err != nil {
+			return err
+		}
+		return ErrNilHTTPResponse
 	}
 
 	markedCompleted, err := uc.repo.Complete(ctx, jobID, *resp)
