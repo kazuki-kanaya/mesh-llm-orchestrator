@@ -1,6 +1,6 @@
 services:
   redis:
-    image: redis:7
+    image: redis:8.6.2-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "127.0.0.1:6379:6379"
