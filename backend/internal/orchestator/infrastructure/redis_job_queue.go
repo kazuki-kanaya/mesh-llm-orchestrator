@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -24,3 +25,5 @@ func (q *RedisJobQueue) Enqueue(ctx context.Context, jobID uuid.UUID) error {
 func jobQueueKey() string {
 	return "queue:jobs"
 }
+
+var _ ports.JobQueue = (*RedisJobQueue)(nil)

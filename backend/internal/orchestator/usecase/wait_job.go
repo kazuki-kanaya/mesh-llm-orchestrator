@@ -9,6 +9,8 @@ import (
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
 )
 
+var ErrJobNotTerminal = errors.New("job is not terminal")
+
 type WaitJobUseCase struct {
 	repo ports.JobRepository
 	sub  ports.JobSubscriber
@@ -22,7 +24,10 @@ func NewWaitJobUseCase(repo ports.JobRepository, sub ports.JobSubscriber) *WaitJ
 }
 
 func (uc *WaitJobUseCase) Execute(ctx context.Context, jobID uuid.UUID) (*jobdomain.HTTPResponse, error) {
-	sub := uc.sub.Subscribe(ctx, jobID)
+	sub, err := uc.sub.Subscribe(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
 	defer sub.Close()
 
 	job, err := uc.repo.Get(ctx, jobID)
@@ -45,7 +50,7 @@ func (uc *WaitJobUseCase) Execute(ctx context.Context, jobID uuid.UUID) (*jobdom
 			return job.Response, nil
 		}
 
-		return nil, errors.New("job is not terminal")
+		return nil, ErrJobNotTerminal
 
 	case <-ctx.Done():
 		return nil, ctx.Err()

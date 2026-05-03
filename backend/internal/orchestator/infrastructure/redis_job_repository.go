@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	jobdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestator/ports"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -30,7 +31,7 @@ func (repo *RedisJobRepository) Create(ctx context.Context, job *jobdomain.Job) 
 	return repo.rdb.HSet(ctx, jobKey(job.ID), map[string]any{
 		"status":      job.Status,
 		"request":     requestBytes,
-		"retry_count": 0,
+		"retry_count": job.RetryCount,
 	}).Err()
 }
 
@@ -66,3 +67,5 @@ func (repo *RedisJobRepository) Get(ctx context.Context, jobID uuid.UUID) (*jobd
 func jobKey(jobID uuid.UUID) string {
 	return "job:" + jobID.String()
 }
+
+var _ ports.JobRepository = (*RedisJobRepository)(nil)

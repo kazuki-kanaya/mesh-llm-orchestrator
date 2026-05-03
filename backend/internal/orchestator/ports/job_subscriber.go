@@ -7,7 +7,7 @@ import (
 )
 
 type JobSubscriber interface {
-	Subscribe(ctx context.Context, jobID uuid.UUID) Subscription
+	Subscribe(ctx context.Context, jobID uuid.UUID) (Subscription, error)
 }
 
 type Subscription interface {
