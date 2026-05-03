@@ -3,12 +3,12 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/executor/ports"
 	jobdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
+	jobinfra "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/infrastructure"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -25,7 +25,7 @@ func NewRedisJobRepository(rdb *goredis.Client) ports.JobRepository {
 
 var claimJobScript = goredis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") == ARGV[1] then
-	redis.call("HSET", KEYS[1], "status", ARGV[2])
+	redis.call("HSET", KEYS[1], "status", ARGV[2], "started_at", ARGV[3])
 	return 1
 end
 return 0
@@ -38,6 +38,7 @@ func (repo *RedisJobRepository) Claim(ctx context.Context, jobID uuid.UUID) (boo
 		[]string{redis.JobKey(jobID)},
 		jobdomain.StatusQueued,
 		jobdomain.StatusRunning,
+		time.Now().UTC().Format(time.RFC3339Nano),
 	).Int()
 	if err != nil {
 		return false, err
@@ -52,37 +53,7 @@ func (repo *RedisJobRepository) Get(ctx context.Context, jobID uuid.UUID) (*jobd
 		return nil, err
 	}
 
-	if len(values) == 0 {
-		return nil, fmt.Errorf("job not found: %s", jobID)
-	}
-
-	retryCount, err := strconv.Atoi(values["retry_count"])
-	if err != nil {
-		return nil, err
-	}
-
-	var req jobdomain.HTTPRequest
-	if err := json.Unmarshal([]byte(values["request"]), &req); err != nil {
-		return nil, err
-	}
-
-	var resp *jobdomain.HTTPResponse
-	if rawResponse := values["response"]; rawResponse != "" {
-		var decoded jobdomain.HTTPResponse
-		if err := json.Unmarshal([]byte(rawResponse), &decoded); err != nil {
-			return nil, err
-		}
-		resp = &decoded
-	}
-
-	job := &jobdomain.Job{
-		ID:         jobID,
-		Status:     jobdomain.Status(values["status"]),
-		Request:    req,
-		Response:   resp,
-		RetryCount: retryCount,
-	}
-	return job, nil
+	return jobinfra.FromRedisHash(jobID, values)
 }
 
 var completeJobScript = goredis.NewScript(`

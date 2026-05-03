@@ -21,3 +21,12 @@ func (s Status) IsTerminal() bool {
 func (s Status) IsRunnable() bool {
 	return s == StatusQueued
 }
+
+func (s Status) IsValid() bool {
+	switch s {
+	case StatusQueued, StatusRunning, StatusCompleted, StatusFailed:
+		return true
+	default:
+		return false
+	}
+}
