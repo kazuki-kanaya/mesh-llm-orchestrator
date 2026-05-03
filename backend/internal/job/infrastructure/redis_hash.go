@@ -22,7 +22,7 @@ func ToRedisHash(job *domain.Job) (map[string]any, error) {
 	}
 
 	values := map[string]any{
-		"status":      job.Status,
+		"status":      string(job.Status),
 		"request":     requestBytes,
 		"retry_count": job.RetryCount,
 	}
