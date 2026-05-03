@@ -5,25 +5,22 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/orchestrator/ports"
-	"github.com/redis/go-redis/v9"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 type RedisJobQueue struct {
-	rdb *redis.Client
+	rdb *goredis.Client
 }
 
-func NewRedisJobQueue(rdb *redis.Client) *RedisJobQueue {
+func NewRedisJobQueue(rdb *goredis.Client) *RedisJobQueue {
 	return &RedisJobQueue{
 		rdb: rdb,
 	}
 }
 
 func (q *RedisJobQueue) Enqueue(ctx context.Context, jobID uuid.UUID) error {
-	return q.rdb.RPush(ctx, jobQueueKey(), jobID.String()).Err()
-}
-
-func jobQueueKey() string {
-	return "queue:jobs"
+	return q.rdb.RPush(ctx, redis.JobQueueKey(), jobID.String()).Err()
 }
 
 var _ ports.JobQueue = (*RedisJobQueue)(nil)

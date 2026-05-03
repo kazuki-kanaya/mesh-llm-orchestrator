@@ -14,3 +14,12 @@ type Job struct {
 	StartedAt  *time.Time
 	RetryCount int
 }
+
+func NewJob(id uuid.UUID, request HTTPRequest) *Job {
+	return &Job{
+		ID:         id,
+		Status:     StatusQueued,
+		Request:    request,
+		RetryCount: 0,
+	}
+}

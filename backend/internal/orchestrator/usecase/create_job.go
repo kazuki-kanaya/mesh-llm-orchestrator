@@ -22,12 +22,7 @@ func NewCreateJobUseCase(repo ports.JobRepository, queue ports.JobQueue) *Create
 
 func (uc *CreateJobUseCase) Execute(ctx context.Context, req jobdomain.HTTPRequest) (uuid.UUID, error) {
 	jobID := uuid.New()
-	job := &jobdomain.Job{
-		ID:         jobID,
-		Status:     jobdomain.StatusQueued,
-		Request:    req,
-		RetryCount: 0,
-	}
+	job := jobdomain.NewJob(jobID, req)
 
 	if err := uc.repo.Create(ctx, job); err != nil {
 		return uuid.Nil, err
