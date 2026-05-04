@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,31 +15,41 @@ import (
 )
 
 type RedisJobRepository struct {
-	rdb *goredis.Client
+	rdb         *goredis.Client
+	terminalTTL time.Duration
 }
 
-func NewRedisJobRepository(rdb *goredis.Client) ports.JobRepository {
+func NewRedisJobRepository(rdb *goredis.Client, terminalTTL time.Duration) ports.JobRepository {
 	return &RedisJobRepository{
-		rdb: rdb,
+		rdb:         rdb,
+		terminalTTL: terminalTTL,
 	}
 }
 
 var claimJobScript = goredis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") == ARGV[1] then
 	redis.call("HSET", KEYS[1], "status", ARGV[2], "started_at", ARGV[3])
+	redis.call("ZADD", KEYS[2], ARGV[4], ARGV[5])
 	return 1
 end
 return 0
 `)
 
 func (repo *RedisJobRepository) Claim(ctx context.Context, jobID uuid.UUID) (bool, error) {
+	now := time.Now().UTC()
+
 	result, err := claimJobScript.Run(
 		ctx,
 		repo.rdb,
-		[]string{redis.JobKey(jobID)},
+		[]string{
+			redis.JobKey(jobID),
+			redis.RunningJobsKey(),
+		},
 		string(jobdomain.StatusQueued),
 		string(jobdomain.StatusRunning),
-		time.Now().UTC().Format(time.RFC3339Nano),
+		now.Format(time.RFC3339Nano),
+		now.Unix(),
+		jobID.String(),
 	).Int()
 	if err != nil {
 		return false, err
@@ -62,6 +73,8 @@ if redis.call("HGET", KEYS[1], "status") == ARGV[1] then
 		"response", ARGV[2],
 		"status", ARGV[3]
 	)
+	redis.call("ZREM", KEYS[2], ARGV[4])
+	redis.call("EXPIRE", KEYS[1], ARGV[5])
 	return 1
 end
 return 0
@@ -76,10 +89,15 @@ func (repo *RedisJobRepository) Complete(ctx context.Context, jobID uuid.UUID, r
 	result, err := completeJobScript.Run(
 		ctx,
 		repo.rdb,
-		[]string{redis.JobKey(jobID)},
+		[]string{
+			redis.JobKey(jobID),
+			redis.RunningJobsKey(),
+		},
 		string(jobdomain.StatusRunning),
 		responseBytes,
 		string(jobdomain.StatusCompleted),
+		jobID.String(),
+		repo.terminalTTLSeconds(),
 	).Int()
 	if err != nil {
 		return false, err
@@ -91,6 +109,8 @@ func (repo *RedisJobRepository) Complete(ctx context.Context, jobID uuid.UUID, r
 var failJobScript = goredis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") == ARGV[1] then
 	redis.call("HSET", KEYS[1], "status", ARGV[2])
+	redis.call("ZREM", KEYS[2], ARGV[3])
+	redis.call("EXPIRE", KEYS[1], ARGV[4])
 	return 1
 end
 return 0
@@ -100,15 +120,24 @@ func (repo *RedisJobRepository) Fail(ctx context.Context, jobID uuid.UUID) (bool
 	result, err := failJobScript.Run(
 		ctx,
 		repo.rdb,
-		[]string{redis.JobKey(jobID)},
+		[]string{
+			redis.JobKey(jobID),
+			redis.RunningJobsKey(),
+		},
 		string(jobdomain.StatusRunning),
 		string(jobdomain.StatusFailed),
+		jobID.String(),
+		repo.terminalTTLSeconds(),
 	).Int()
 	if err != nil {
 		return false, err
 	}
 
 	return result == 1, nil
+}
+
+func (repo *RedisJobRepository) terminalTTLSeconds() int {
+	return int(math.Ceil(repo.terminalTTL.Seconds()))
 }
 
 var _ ports.JobRepository = (*RedisJobRepository)(nil)

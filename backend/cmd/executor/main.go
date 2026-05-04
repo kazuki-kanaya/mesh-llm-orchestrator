@@ -15,10 +15,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-	}
+	redisAddr := getEnv("REDIS_ADDR")
 
 	rdb, err := redis.NewClient(ctx, redis.Config{
 		Addr: redisAddr,
@@ -28,7 +25,12 @@ func main() {
 	}
 	defer rdb.Close()
 
-	repo := infrastructure.NewRedisJobRepository(rdb)
+	terminalTTL := durationFromEnv("JOB_TERMINAL_TTL")
+	if terminalTTL <= 0 {
+		log.Fatal("JOB_TERMINAL_TTL must be positive")
+	}
+
+	repo := infrastructure.NewRedisJobRepository(rdb, terminalTTL)
 	queue := infrastructure.NewRedisJobQueue(rdb)
 	publisher := infrastructure.NewRedisJobPublisher(rdb)
 	httpClient := infrastructure.NewHTTPClient(&http.Client{
@@ -52,4 +54,22 @@ func main() {
 			time.Sleep(retryBackoff)
 		}
 	}
+}
+
+func getEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		log.Fatalf("%s is required", key)
+	}
+	return value
+}
+
+func durationFromEnv(key string) time.Duration {
+	value := getEnv(key)
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		log.Fatalf("invalid duration env: key=%s value=%q err=%v", key, value, err)
+	}
+
+	return duration
 }
