@@ -112,6 +112,8 @@ func (repo *RedisJobRepository) Complete(ctx context.Context, jobID uuid.UUID, r
 var failJobScript = goredis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") == ARGV[1] then
 	redis.call("HSET", KEYS[1], "status", ARGV[2])
+	redis.call("ZREM", KEYS[2], ARGV[3])
+	redis.call("EXPIRE", KEYS[1], ARGV[4])
 	return 1
 end
 return 0
@@ -121,9 +123,14 @@ func (repo *RedisJobRepository) Fail(ctx context.Context, jobID uuid.UUID) (bool
 	result, err := failJobScript.Run(
 		ctx,
 		repo.rdb,
-		[]string{redis.JobKey(jobID)},
+		[]string{
+			redis.JobKey(jobID),
+			redis.RunningJobsKey(),
+		},
 		string(jobdomain.StatusRunning),
 		string(jobdomain.StatusFailed),
+		jobID.String(),
+		int(repo.terminalTTL.Seconds()),
 	).Int()
 	if err != nil {
 		return false, err
