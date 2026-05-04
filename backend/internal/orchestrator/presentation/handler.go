@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	jobdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/job/domain"
@@ -55,7 +56,8 @@ func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.waitJob.Execute(waitCtx, jobID)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			writeAcceptedJob(w, jobID.String())
+			log.Printf("job did not complete within wait timeout: job_id=%s timeout=%s", jobID, h.waitTimeout)
+			http.Error(w, "upstream request timed out before completion", http.StatusGatewayTimeout)
 			return
 		}
 
@@ -79,10 +81,13 @@ func (h *ProxyHandler) buildHTTPRequest(r *http.Request) (jobdomain.HTTPRequest,
 		return jobdomain.HTTPRequest{}, err
 	}
 
+	headers := r.Header.Clone()
+	removeHopByHopHeaders(headers)
+
 	return jobdomain.HTTPRequest{
 		Method:  r.Method,
 		URL:     targetURL,
-		Headers: r.Header.Clone(),
+		Headers: headers,
 		Body:    body,
 	}, nil
 }
@@ -100,19 +105,16 @@ func (h *ProxyHandler) buildTargetURL(r *http.Request) (string, error) {
 	return target.String(), nil
 }
 
-func writeAcceptedJob(w http.ResponseWriter, jobID string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_, _ = w.Write([]byte(`{"job_id":"` + jobID + `","status":"queued"}`))
-}
-
 func writeUpstreamResponse(w http.ResponseWriter, resp *jobdomain.HTTPResponse) {
 	if resp == nil {
 		http.Error(w, "upstream response is empty", http.StatusBadGateway)
 		return
 	}
 
-	for key, values := range resp.Headers {
+	headers := resp.Headers.Clone()
+	removeHopByHopHeaders(headers)
+
+	for key, values := range headers {
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
@@ -120,6 +122,28 @@ func writeUpstreamResponse(w http.ResponseWriter, resp *jobdomain.HTTPResponse) 
 
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(resp.Body)
+}
+
+func removeHopByHopHeaders(headers http.Header) {
+	for _, value := range headers.Values("Connection") {
+		for _, name := range strings.Split(value, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				headers.Del(name)
+			}
+		}
+	}
+
+	for _, name := range []string{
+		"Connection",
+		"Keep-Alive",
+		"Proxy-Connection",
+		"TE",
+		"Trailer",
+		"Transfer-Encoding",
+		"Upgrade",
+	} {
+		headers.Del(name)
+	}
 }
 
 func joinPath(basePath, requestPath string) string {

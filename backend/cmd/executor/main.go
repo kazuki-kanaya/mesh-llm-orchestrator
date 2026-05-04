@@ -44,9 +44,12 @@ func main() {
 
 	log.Println("executor started")
 
+	const retryBackoff = time.Second
+
 	for {
 		if err := executeJobUseCase.Execute(ctx); err != nil {
 			log.Printf("failed to execute job: %v", err)
+			time.Sleep(retryBackoff)
 		}
 	}
 }
