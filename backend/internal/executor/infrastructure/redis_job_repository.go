@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,7 +101,7 @@ func (repo *RedisJobRepository) Complete(ctx context.Context, jobID uuid.UUID, r
 		responseBytes,
 		string(jobdomain.StatusCompleted),
 		jobID.String(),
-		int(repo.terminalTTL.Seconds()),
+		repo.terminalTTLSeconds(),
 	).Int()
 	if err != nil {
 		return false, err
@@ -130,13 +131,17 @@ func (repo *RedisJobRepository) Fail(ctx context.Context, jobID uuid.UUID) (bool
 		string(jobdomain.StatusRunning),
 		string(jobdomain.StatusFailed),
 		jobID.String(),
-		int(repo.terminalTTL.Seconds()),
+		repo.terminalTTLSeconds(),
 	).Int()
 	if err != nil {
 		return false, err
 	}
 
 	return result == 1, nil
+}
+
+func (repo *RedisJobRepository) terminalTTLSeconds() int {
+	return int(math.Ceil(repo.terminalTTL.Seconds()))
 }
 
 var _ ports.JobRepository = (*RedisJobRepository)(nil)

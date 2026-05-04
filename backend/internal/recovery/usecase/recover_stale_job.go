@@ -7,6 +7,11 @@ import (
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/recovery/ports"
 )
 
+const (
+	defaultStaleAfter = 5 * time.Minute
+	defaultLimit      = int64(100)
+)
+
 type RecoverStaleJobsUseCase struct {
 	store      ports.JobRecoveryStore
 	staleAfter time.Duration
@@ -14,6 +19,13 @@ type RecoverStaleJobsUseCase struct {
 }
 
 func NewRecoverStaleJobsUseCase(store ports.JobRecoveryStore, staleAfter time.Duration, limit int64) *RecoverStaleJobsUseCase {
+	if staleAfter <= 0 {
+		staleAfter = defaultStaleAfter
+	}
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+
 	return &RecoverStaleJobsUseCase{
 		store:      store,
 		staleAfter: staleAfter,
