@@ -65,3 +65,5 @@ func (c *RedisJobCreator) Create(ctx context.Context, job *jobdomain.Job) error 
 
 	return nil
 }
+
+var _ ports.JobCreator = (*RedisJobCreator)(nil)
