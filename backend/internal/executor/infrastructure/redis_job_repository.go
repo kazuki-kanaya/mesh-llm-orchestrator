@@ -36,8 +36,8 @@ func (repo *RedisJobRepository) Claim(ctx context.Context, jobID uuid.UUID) (boo
 		ctx,
 		repo.rdb,
 		[]string{redis.JobKey(jobID)},
-		jobdomain.StatusQueued,
-		jobdomain.StatusRunning,
+		string(jobdomain.StatusQueued),
+		string(jobdomain.StatusRunning),
 		time.Now().UTC().Format(time.RFC3339Nano),
 	).Int()
 	if err != nil {
@@ -77,9 +77,9 @@ func (repo *RedisJobRepository) Complete(ctx context.Context, jobID uuid.UUID, r
 		ctx,
 		repo.rdb,
 		[]string{redis.JobKey(jobID)},
-		jobdomain.StatusRunning,
+		string(jobdomain.StatusRunning),
 		responseBytes,
-		jobdomain.StatusCompleted,
+		string(jobdomain.StatusCompleted),
 	).Int()
 	if err != nil {
 		return false, err
@@ -101,8 +101,8 @@ func (repo *RedisJobRepository) Fail(ctx context.Context, jobID uuid.UUID) (bool
 		ctx,
 		repo.rdb,
 		[]string{redis.JobKey(jobID)},
-		jobdomain.StatusRunning,
-		jobdomain.StatusFailed,
+		string(jobdomain.StatusRunning),
+		string(jobdomain.StatusFailed),
 	).Int()
 	if err != nil {
 		return false, err
