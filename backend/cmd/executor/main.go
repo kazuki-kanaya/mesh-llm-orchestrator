@@ -28,7 +28,7 @@ func main() {
 	}
 	defer rdb.Close()
 
-	repo := infrastructure.NewRedisJobRepository(rdb)
+	repo := infrastructure.NewRedisJobRepository(rdb, 24*time.Hour)
 	queue := infrastructure.NewRedisJobQueue(rdb)
 	publisher := infrastructure.NewRedisJobPublisher(rdb)
 	httpClient := infrastructure.NewHTTPClient(&http.Client{

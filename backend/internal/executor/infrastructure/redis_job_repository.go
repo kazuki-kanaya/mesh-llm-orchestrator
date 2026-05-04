@@ -14,12 +14,18 @@ import (
 )
 
 type RedisJobRepository struct {
-	rdb *goredis.Client
+	rdb         *goredis.Client
+	terminalTTL time.Duration
 }
 
-func NewRedisJobRepository(rdb *goredis.Client) ports.JobRepository {
+func NewRedisJobRepository(rdb *goredis.Client, terminalTTL time.Duration) ports.JobRepository {
+	if terminalTTL <= 0 {
+		terminalTTL = 24 * time.Hour
+	}
+
 	return &RedisJobRepository{
-		rdb: rdb,
+		rdb:         rdb,
+		terminalTTL: terminalTTL,
 	}
 }
 
@@ -70,6 +76,8 @@ if redis.call("HGET", KEYS[1], "status") == ARGV[1] then
 		"response", ARGV[2],
 		"status", ARGV[3]
 	)
+	redis.call("ZREM", KEYS[2], ARGV[4])
+	redis.call("EXPIRE", KEYS[1], ARGV[5])
 	return 1
 end
 return 0
@@ -84,10 +92,15 @@ func (repo *RedisJobRepository) Complete(ctx context.Context, jobID uuid.UUID, r
 	result, err := completeJobScript.Run(
 		ctx,
 		repo.rdb,
-		[]string{redis.JobKey(jobID)},
+		[]string{
+			redis.JobKey(jobID),
+			redis.RunningJobsKey(),
+		},
 		string(jobdomain.StatusRunning),
 		responseBytes,
 		string(jobdomain.StatusCompleted),
+		jobID.String(),
+		int(repo.terminalTTL.Seconds()),
 	).Int()
 	if err != nil {
 		return false, err
