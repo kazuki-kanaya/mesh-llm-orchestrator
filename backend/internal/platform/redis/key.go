@@ -13,3 +13,7 @@ func JobResultChannel(jobID uuid.UUID) string {
 func JobQueueKey() string {
 	return "queue:jobs"
 }
+
+func RunningJobsKey() string {
+	return "jobs:running"
+}

@@ -26,19 +26,27 @@ func NewRedisJobRepository(rdb *goredis.Client) ports.JobRepository {
 var claimJobScript = goredis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") == ARGV[1] then
 	redis.call("HSET", KEYS[1], "status", ARGV[2], "started_at", ARGV[3])
+	redis.call("ZADD", KEYS[2], ARGV[4], ARGV[5])
 	return 1
 end
 return 0
 `)
 
 func (repo *RedisJobRepository) Claim(ctx context.Context, jobID uuid.UUID) (bool, error) {
+	now := time.Now().UTC()
+
 	result, err := claimJobScript.Run(
 		ctx,
 		repo.rdb,
-		[]string{redis.JobKey(jobID)},
+		[]string{
+			redis.JobKey(jobID),
+			redis.RunningJobsKey(),
+		},
 		string(jobdomain.StatusQueued),
 		string(jobdomain.StatusRunning),
-		time.Now().UTC().Format(time.RFC3339Nano),
+		now.Format(time.RFC3339Nano),
+		now.Unix(),
+		jobID.String(),
 	).Int()
 	if err != nil {
 		return false, err
