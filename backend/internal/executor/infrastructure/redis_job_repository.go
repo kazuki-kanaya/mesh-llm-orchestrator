@@ -20,10 +20,6 @@ type RedisJobRepository struct {
 }
 
 func NewRedisJobRepository(rdb *goredis.Client, terminalTTL time.Duration) ports.JobRepository {
-	if terminalTTL <= 0 {
-		terminalTTL = 24 * time.Hour
-	}
-
 	return &RedisJobRepository{
 		rdb:         rdb,
 		terminalTTL: terminalTTL,

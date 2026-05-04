@@ -16,20 +16,9 @@ import (
 func main() {
 	ctx := context.Background()
 
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-	}
-
-	targetBaseURL := os.Getenv("TARGET_BASE_URL")
-	if targetBaseURL == "" {
-		log.Fatal("TARGET_BASE_URL is required")
-	}
-
-	addr := os.Getenv("ORCHESTRATOR_ADDR")
-	if addr == "" {
-		addr = ":8080"
-	}
+	redisAddr := getEnv("REDIS_ADDR")
+	targetBaseURL := getEnv("TARGET_BASE_URL")
+	addr := getEnv("ORCHESTRATOR_ADDR")
 
 	rdb, err := redis.NewClient(ctx, redis.Config{
 		Addr: redisAddr,
@@ -50,7 +39,7 @@ func main() {
 		createJobUseCase,
 		waitJobUseCase,
 		targetBaseURL,
-		30*time.Second,
+		durationFromEnv("ORCHESTRATOR_WAIT_TIMEOUT"),
 	)
 
 	mux := http.NewServeMux()
@@ -65,4 +54,22 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("orchestrator server stopped: %v", err)
 	}
+}
+
+func getEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		log.Fatalf("%s is required", key)
+	}
+	return value
+}
+
+func durationFromEnv(key string) time.Duration {
+	value := getEnv(key)
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		log.Fatalf("invalid duration env: key=%s value=%q err=%v", key, value, err)
+	}
+
+	return duration
 }

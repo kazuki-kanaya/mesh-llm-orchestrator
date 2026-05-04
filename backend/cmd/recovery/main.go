@@ -15,10 +15,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-	}
+	redisAddr := getEnv("REDIS_ADDR")
 
 	rdb, err := redis.NewClient(ctx, redis.Config{
 		Addr: redisAddr,
@@ -31,11 +28,11 @@ func main() {
 	store := infrastructure.NewRedisJobRecoveryStore(rdb)
 	recoverStaleJobsUseCase := usecase.NewRecoverStaleJobsUseCase(
 		store,
-		durationFromEnv("RECOVERY_STALE_AFTER", 5*time.Minute),
-		int64FromEnv("RECOVERY_BATCH_SIZE", 100),
+		durationFromEnv("RECOVERY_STALE_AFTER"),
+		int64FromEnv("RECOVERY_BATCH_SIZE"),
 	)
 
-	interval := durationFromEnv("RECOVERY_INTERVAL", time.Minute)
+	interval := durationFromEnv("RECOVERY_INTERVAL")
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -58,31 +55,29 @@ func main() {
 	}
 }
 
-func durationFromEnv(key string, fallback time.Duration) time.Duration {
+func getEnv(key string) string {
 	value := os.Getenv(key)
 	if value == "" {
-		return fallback
+		log.Fatalf("%s is required", key)
 	}
+	return value
+}
 
+func durationFromEnv(key string) time.Duration {
+	value := getEnv(key)
 	duration, err := time.ParseDuration(value)
 	if err != nil {
-		log.Printf("invalid duration env: key=%s value=%q err=%v", key, value, err)
-		return fallback
+		log.Fatalf("invalid duration env: key=%s value=%q err=%v", key, value, err)
 	}
 
 	return duration
 }
 
-func int64FromEnv(key string, fallback int64) int64 {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
-	}
-
+func int64FromEnv(key string) int64 {
+	value := getEnv(key)
 	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
-		log.Printf("invalid int env: key=%s value=%q err=%v", key, value, err)
-		return fallback
+		log.Fatalf("invalid int env: key=%s value=%q err=%v", key, value, err)
 	}
 
 	return parsed
