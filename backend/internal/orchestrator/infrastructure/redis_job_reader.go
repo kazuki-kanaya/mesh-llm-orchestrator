@@ -11,27 +11,18 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-type RedisJobRepository struct {
+type RedisJobReader struct {
 	rdb *goredis.Client
 }
 
-func NewRedisJobRepository(rdb *goredis.Client) *RedisJobRepository {
-	return &RedisJobRepository{
+func NewRedisJobReader(rdb *goredis.Client) ports.JobReader {
+	return &RedisJobReader{
 		rdb: rdb,
 	}
 }
 
-func (repo *RedisJobRepository) Create(ctx context.Context, job *jobdomain.Job) error {
-	values, err := jobinfra.ToRedisHash(job)
-	if err != nil {
-		return err
-	}
-
-	return repo.rdb.HSet(ctx, redis.JobKey(job.ID), values).Err()
-}
-
-func (repo *RedisJobRepository) Get(ctx context.Context, jobID uuid.UUID) (*jobdomain.Job, error) {
-	values, err := repo.rdb.HGetAll(ctx, redis.JobKey(jobID)).Result()
+func (r *RedisJobReader) Get(ctx context.Context, jobID uuid.UUID) (*jobdomain.Job, error) {
+	values, err := r.rdb.HGetAll(ctx, redis.JobKey(jobID)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -39,4 +30,4 @@ func (repo *RedisJobRepository) Get(ctx context.Context, jobID uuid.UUID) (*jobd
 	return jobinfra.FromRedisHash(jobID, values)
 }
 
-var _ ports.JobRepository = (*RedisJobRepository)(nil)
+var _ ports.JobReader = (*RedisJobReader)(nil)
