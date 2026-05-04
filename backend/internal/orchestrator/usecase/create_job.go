@@ -9,14 +9,12 @@ import (
 )
 
 type CreateJobUseCase struct {
-	repo  ports.JobRepository
-	queue ports.JobQueue
+	creator ports.JobCreator
 }
 
-func NewCreateJobUseCase(repo ports.JobRepository, queue ports.JobQueue) *CreateJobUseCase {
+func NewCreateJobUseCase(creator ports.JobCreator) *CreateJobUseCase {
 	return &CreateJobUseCase{
-		repo:  repo,
-		queue: queue,
+		creator: creator,
 	}
 }
 
@@ -24,11 +22,7 @@ func (uc *CreateJobUseCase) Execute(ctx context.Context, req jobdomain.HTTPReque
 	jobID := uuid.New()
 	job := jobdomain.NewJob(jobID, req)
 
-	if err := uc.repo.Create(ctx, job); err != nil {
-		return uuid.Nil, err
-	}
-
-	if err := uc.queue.Enqueue(ctx, jobID); err != nil {
+	if err := uc.creator.Create(ctx, job); err != nil {
 		return uuid.Nil, err
 	}
 

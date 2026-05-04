@@ -9,14 +9,14 @@ import (
 )
 
 type WaitJobUseCase struct {
-	repo ports.JobRepository
-	sub  ports.JobSubscriber
+	reader ports.JobReader
+	sub    ports.JobSubscriber
 }
 
-func NewWaitJobUseCase(repo ports.JobRepository, sub ports.JobSubscriber) *WaitJobUseCase {
+func NewWaitJobUseCase(reader ports.JobReader, sub ports.JobSubscriber) *WaitJobUseCase {
 	return &WaitJobUseCase{
-		repo: repo,
-		sub:  sub,
+		reader: reader,
+		sub:    sub,
 	}
 }
 
@@ -27,7 +27,7 @@ func (uc *WaitJobUseCase) Execute(ctx context.Context, jobID uuid.UUID) (*jobdom
 	}
 	defer sub.Close()
 
-	job, err := uc.repo.Get(ctx, jobID)
+	job, err := uc.reader.Get(ctx, jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (uc *WaitJobUseCase) Execute(ctx context.Context, jobID uuid.UUID) (*jobdom
 	for {
 		select {
 		case <-sub.Channel():
-			job, err := uc.repo.Get(ctx, jobID)
+			job, err := uc.reader.Get(ctx, jobID)
 			if err != nil {
 				return nil, err
 			}

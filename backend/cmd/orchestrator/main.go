@@ -39,12 +39,12 @@ func main() {
 	}
 	defer rdb.Close()
 
-	repo := infrastructure.NewRedisJobRepository(rdb)
-	queue := infrastructure.NewRedisJobQueue(rdb)
+	reader := infrastructure.NewRedisJobReader(rdb)
+	creator := infrastructure.NewRedisJobCreator(rdb)
 	subscriber := infrastructure.NewRedisJobSubscriber(rdb)
 
-	createJobUseCase := usecase.NewCreateJobUseCase(repo, queue)
-	waitJobUseCase := usecase.NewWaitJobUseCase(repo, subscriber)
+	createJobUseCase := usecase.NewCreateJobUseCase(creator)
+	waitJobUseCase := usecase.NewWaitJobUseCase(reader, subscriber)
 
 	handler := presentation.NewProxyHandler(
 		createJobUseCase,
