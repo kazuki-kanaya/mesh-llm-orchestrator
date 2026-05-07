@@ -208,5 +208,10 @@ func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID
 }
 
 func (r *RedisJobRepository) Get(ctx context.Context, jobID domain.JobID) (*domain.Job, error) {
+	values, err := r.rdb.HGetAll(ctx, redis.JobKey(jobID)).Result()
+	if err != nil {
+		return nil, err
+	}
 
+	return FromRedisHash(jobID, values)
 }

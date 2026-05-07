@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/ports"
@@ -22,8 +23,10 @@ type GetInput struct {
 }
 
 type GetOutput struct {
-	Job domain.Job
+	Job *domain.Job
 }
+
+var ErrJobNotFound = errors.New("job not found")
 
 func (uc *GetUseCase) Execute(ctx context.Context, input GetInput) (*GetOutput, error) {
 	if err := input.JobID.Validate(); err != nil {
@@ -35,7 +38,11 @@ func (uc *GetUseCase) Execute(ctx context.Context, input GetInput) (*GetOutput, 
 		return nil, err
 	}
 
+	if job == nil {
+		return nil, ErrJobNotFound
+	}
+
 	return &GetOutput{
-		Job: *job,
+		Job: job,
 	}, nil
 }
