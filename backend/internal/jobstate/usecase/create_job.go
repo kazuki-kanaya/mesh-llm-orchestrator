@@ -18,19 +18,18 @@ func NewCreateJobUseCase(repo ports.JobRepository) *CreateJobUseCase {
 	}
 }
 
-type CreateJobRequest struct {
+type CreateJobInput struct {
 	Request domain.HTTPRequest
 }
 
-type CreateJobResponse struct {
+type CreateJobOutput struct {
 	JobID domain.JobID
 }
 
-func (uc *CreateJobUseCase) Execute(ctx context.Context, request CreateJobRequest) (*CreateJobResponse, error) {
+func (uc *CreateJobUseCase) Execute(ctx context.Context, input CreateJobInput) (*CreateJobOutput, error) {
 	jobID := domain.NewJobID()
-	now := time.Now().UTC()
 
-	job, err := domain.NewJob(jobID, request.Request, now)
+	job, err := domain.NewJob(jobID, input.Request, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +39,7 @@ func (uc *CreateJobUseCase) Execute(ctx context.Context, request CreateJobReques
 		return nil, err
 	}
 
-	return &CreateJobResponse{
+	return &CreateJobOutput{
 		JobID: jobID,
 	}, nil
 }

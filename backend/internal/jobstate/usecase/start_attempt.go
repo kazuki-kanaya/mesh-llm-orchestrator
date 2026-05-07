@@ -18,26 +18,26 @@ func NewStartAttemptUseCase(repo ports.JobRepository) *StartAttemptUseCase {
 	}
 }
 
-type StartAttemptRequest struct {
+type StartAttemptInput struct {
 	JobID domain.JobID
 }
 
-type StartAttemptResponse struct {
+type StartAttemptOutput struct {
 	Accepted bool
 	Attempt  int64
 }
 
-func (uc *StartAttemptUseCase) Execute(ctx context.Context, request StartAttemptRequest) (*StartAttemptResponse, error) {
-	if err := request.JobID.Validate(); err != nil {
+func (uc *StartAttemptUseCase) Execute(ctx context.Context, input StartAttemptInput) (*StartAttemptOutput, error) {
+	if err := input.JobID.Validate(); err != nil {
 		return nil, err
 	}
 
-	accepted, attempt, err := uc.repo.StartAttempt(ctx, request.JobID, time.Now().UTC())
+	accepted, attempt, err := uc.repo.StartAttempt(ctx, input.JobID, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
 
-	return &StartAttemptResponse{
+	return &StartAttemptOutput{
 		Accepted: accepted,
 		Attempt:  attempt,
 	}, nil
