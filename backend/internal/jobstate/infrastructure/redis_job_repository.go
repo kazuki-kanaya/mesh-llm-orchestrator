@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 type RedisJobRepository struct {
 	rdb *goredis.Client
 }
+
+const jobResultPayload = "done"
 
 func NewRedisJobRepository(rdb *goredis.Client) *RedisJobRepository {
 	return &RedisJobRepository{
@@ -117,8 +120,51 @@ func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobI
 	return acceptedInt == 1, attempt, nil
 }
 
-func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.JobID, attempt int64, response domain.HTTPResponse, now time.Time) (accepted bool, err error) {
+var completeAttemptScript = goredis.NewScript(`
+if redis.call("HGET", KEYS[1], "status") ~= ARGV[1] then
+	return 0
+end
 
+if tonumber(redis.call("HGET", KEYS[1], "current_attempt")) ~= tonumber(ARGV[2]) then
+	return 0
+end
+
+redis.call("HSET", KEYS[1],
+	"response", ARGV[3],
+	"status", ARGV[4],
+	"terminated_at", ARGV[5]
+)
+
+redis.call("PUBLISH", KEYS[2], ARGV[6])
+
+return 1
+`)
+
+func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.JobID, attempt int64, response domain.HTTPResponse, now time.Time) (accepted bool, err error) {
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return false, err
+	}
+
+	result, err := completeAttemptScript.Run(
+		ctx,
+		r.rdb,
+		[]string{
+			redis.JobKey(jobID),
+			redis.JobResultChannel(jobID),
+		},
+		domain.StatusRunning.String(),
+		attempt,
+		responseBytes,
+		domain.StatusCompleted.String(),
+		now.UTC().Format(time.RFC3339Nano),
+		jobResultPayload,
+	).Int()
+	if err != nil {
+		return false, err
+	}
+
+	return result == 1, nil
 }
 
 func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID, attempt int64, now time.Time) (accepted bool, err error) {
