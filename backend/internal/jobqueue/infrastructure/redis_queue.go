@@ -20,16 +20,12 @@ const (
 )
 
 type RedisQueue struct {
-	rdb   *goredis.Client
-	count int64
-	block time.Duration
+	rdb *goredis.Client
 }
 
 func NewRedisQueue(rdb *goredis.Client) ports.JobQueue {
 	return &RedisQueue{
-		rdb:   rdb,
-		count: defaultReadCount,
-		block: defaultReadBlock,
+		rdb: rdb,
 	}
 }
 
@@ -43,7 +39,7 @@ func (q *RedisQueue) EnsureGroup(ctx context.Context) error {
 	if err == nil {
 		return nil
 	}
-	if strings.Contains(err.Error(), "BUSYGROUP") {
+	if strings.HasPrefix(err.Error(), "BUSYGROUP ") {
 		return nil
 	}
 	return err
