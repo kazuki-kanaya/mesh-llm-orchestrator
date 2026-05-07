@@ -50,7 +50,7 @@ func ToRedisHash(job *domain.Job) (map[string]any, error) {
 
 func FromRedisHash(jobID domain.JobID, values map[string]string) (*domain.Job, error) {
 	if len(values) == 0 {
-		return nil, fmt.Errorf("job not found: %s", jobID)
+		return nil, fmt.Errorf("%w: %s", domain.ErrJobNotFound, jobID)
 	}
 
 	rawStatus := values["status"]

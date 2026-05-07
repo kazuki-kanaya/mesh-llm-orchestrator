@@ -35,12 +35,8 @@ redis.call("HSET", KEYS[1],
 	"current_attempt", ARGV[4]
 )
 
-local stream_id = redis.call("XADD", KEYS[2], "*",
+redis.call("XADD", KEYS[2], "*",
 	"job_id", ARGV[5]
-)
-
-redis.call("HSET", KEYS[1],
-	"stream_id", stream_id
 )
 
 return 1
@@ -55,7 +51,7 @@ func (r *RedisJobRepository) CreateAndEnqueue(ctx context.Context, job *domain.J
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(job.ID),
+			redis.JobKey(job.ID.String()),
 			redis.JobStreamKey(),
 		},
 		values["status"],
@@ -93,7 +89,7 @@ func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobI
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(jobID),
+			redis.JobKey(jobID.String()),
 		},
 		domain.StatusQueued.String(),
 		domain.StatusRunning.String(),
@@ -150,8 +146,8 @@ func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.J
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(jobID),
-			redis.JobResultChannel(jobID),
+			redis.JobKey(jobID.String()),
+			redis.JobResultChannel(jobID.String()),
 		},
 		domain.StatusRunning.String(),
 		attempt,
@@ -191,8 +187,8 @@ func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(jobID),
-			redis.JobResultChannel(jobID),
+			redis.JobKey(jobID.String()),
+			redis.JobResultChannel(jobID.String()),
 		},
 		domain.StatusRunning.String(),
 		attempt,
@@ -208,7 +204,7 @@ func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID
 }
 
 func (r *RedisJobRepository) Get(ctx context.Context, jobID domain.JobID) (*domain.Job, error) {
-	values, err := r.rdb.HGetAll(ctx, redis.JobKey(jobID)).Result()
+	values, err := r.rdb.HGetAll(ctx, redis.JobKey(jobID.String())).Result()
 	if err != nil {
 		return nil, err
 	}

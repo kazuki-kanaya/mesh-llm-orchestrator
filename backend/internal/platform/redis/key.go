@@ -1,13 +1,11 @@
 package redis
 
-import jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
-
-func JobKey(jobID jobstatedomain.JobID) string {
-	return "job:" + jobID.String()
+func JobKey(jobID string) string {
+	return "job:" + jobID
 }
 
-func JobResultChannel(jobID jobstatedomain.JobID) string {
-	return "result:" + jobID.String()
+func JobResultChannel(jobID string) string {
+	return "result:" + jobID
 }
 
 func JobStreamKey() string {
