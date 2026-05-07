@@ -167,8 +167,44 @@ func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.J
 	return result == 1, nil
 }
 
-func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID, attempt int64, now time.Time) (accepted bool, err error) {
+var failAttemptScript = goredis.NewScript(`
+if redis.call("HGET", KEYS[1], "status") ~= ARGV[1] then
+	return 0
+end
 
+if tonumber(redis.call("HGET", KEYS[1], "current_attempt")) ~= tonumber(ARGV[2]) then
+	return 0
+end
+
+redis.call("HSET", KEYS[1],
+	"status", ARGV[3],
+	"terminated_at", ARGV[4]
+)
+
+redis.call("PUBLISH", KEYS[2], ARGV[5])
+
+return 1
+`)
+
+func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID, attempt int64, now time.Time) (accepted bool, err error) {
+	result, err := failAttemptScript.Run(
+		ctx,
+		r.rdb,
+		[]string{
+			redis.JobKey(jobID),
+			redis.JobResultChannel(jobID),
+		},
+		domain.StatusRunning.String(),
+		attempt,
+		domain.StatusFailed.String(),
+		now.UTC().Format(time.RFC3339Nano),
+		jobResultPayload,
+	).Int()
+	if err != nil {
+		return false, err
+	}
+
+	return result == 1, nil
 }
 
 func (r *RedisJobRepository) Get(ctx context.Context, jobID domain.JobID) (*domain.Job, error) {
