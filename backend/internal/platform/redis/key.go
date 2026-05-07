@@ -1,17 +1,17 @@
 package redis
 
-import "github.com/google/uuid"
+import jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 
-func JobKey(jobID uuid.UUID) string {
+func JobKey(jobID jobstatedomain.JobID) string {
 	return "job:" + jobID.String()
 }
 
-func JobResultChannel(jobID uuid.UUID) string {
+func JobResultChannel(jobID jobstatedomain.JobID) string {
 	return "result:" + jobID.String()
 }
 
-func JobQueueKey() string {
-	return "queue:jobs"
+func JobStreamKey() string {
+	return "stream:jobs"
 }
 
 func RunningJobsKey() string {
