@@ -1,17 +1,15 @@
 package redis
 
-import "github.com/google/uuid"
-
-func JobKey(jobID uuid.UUID) string {
-	return "job:" + jobID.String()
+func JobKey(jobID string) string {
+	return "job:" + jobID
 }
 
-func JobResultChannel(jobID uuid.UUID) string {
-	return "result:" + jobID.String()
+func JobResultChannel(jobID string) string {
+	return "result:" + jobID
 }
 
-func JobQueueKey() string {
-	return "queue:jobs"
+func JobStreamKey() string {
+	return "stream:jobs"
 }
 
 func RunningJobsKey() string {

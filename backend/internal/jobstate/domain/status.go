@@ -30,3 +30,7 @@ func (s Status) IsValid() bool {
 		return false
 	}
 }
+
+func (s Status) String() string {
+	return string(s)
+}
