@@ -23,6 +23,7 @@ func ToRedisHash(job *domain.Job) (map[string]any, error) {
 	values := map[string]any{
 		"status":          job.Status.String(),
 		"request":         requestBytes,
+		"created_at":      job.CreatedAt.Format(time.RFC3339Nano),
 		"current_attempt": job.CurrentAttempt,
 	}
 

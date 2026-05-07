@@ -21,14 +21,19 @@ func NewRedisJobRepository(rdb *goredis.Client) *RedisJobRepository {
 }
 
 var createAndEnqueueScript = goredis.NewScript(`
+if redis.call("EXISTS", KEYS[1]) == 1 then
+	return 0
+end
+
 redis.call("HSET", KEYS[1],
 	"status", ARGV[1],
 	"request", ARGV[2],
-	"current_attempt", ARGV[3]
+	"created_at", ARGV[3],
+	"current_attempt", ARGV[4]
 )
 
 local stream_id = redis.call("XADD", KEYS[2], "*",
-	"job_id", ARGV[4]
+	"job_id", ARGV[5]
 )
 
 redis.call("HSET", KEYS[1],
@@ -38,8 +43,8 @@ redis.call("HSET", KEYS[1],
 return 1
 `)
 
-func (r *RedisJobRepository) CreateAndEnqueue(ctx context.Context, job domain.Job) error {
-	values, err := ToRedisHash(&job)
+func (r *RedisJobRepository) CreateAndEnqueue(ctx context.Context, job *domain.Job) error {
+	values, err := ToRedisHash(job)
 	if err != nil {
 		return err
 	}
@@ -52,6 +57,7 @@ func (r *RedisJobRepository) CreateAndEnqueue(ctx context.Context, job domain.Jo
 		},
 		values["status"],
 		values["request"],
+		values["created_at"],
 		values["current_attempt"],
 		job.ID.String(),
 	).Int()
@@ -65,8 +71,50 @@ func (r *RedisJobRepository) CreateAndEnqueue(ctx context.Context, job domain.Jo
 	return nil
 }
 
-func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobID, now time.Time) (accepted bool, attempt int64, err error) {
+var startAttemptScript = goredis.NewScript(`
+if redis.call("HGET", KEYS[1], "status") ~= ARGV[1] then
+	return {0, 0}
+end
 
+local attempt = redis.call("HINCRBY", KEYS[1], "current_attempt", 1)
+redis.call("HSET", KEYS[1],
+	"status", ARGV[2],
+	"started_at", ARGV[3]
+)
+
+return {1, attempt}
+`)
+
+func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobID, now time.Time) (accepted bool, attempt int64, err error) {
+	result, err := startAttemptScript.Run(
+		ctx,
+		r.rdb,
+		[]string{
+			redis.JobKey(jobID),
+		},
+		domain.StatusQueued.String(),
+		domain.StatusRunning.String(),
+		now.UTC().Format(time.RFC3339Nano),
+	).Slice()
+	if err != nil {
+		return false, 0, err
+	}
+
+	if len(result) != 2 {
+		return false, 0, fmt.Errorf("invalid start attempt script result: %v", result)
+	}
+
+	acceptedInt, ok := result[0].(int64)
+	if !ok {
+		return false, 0, fmt.Errorf("invalid start attempt accepted result: %v", result[0])
+	}
+
+	attempt, ok = result[1].(int64)
+	if !ok {
+		return false, 0, fmt.Errorf("invalid start attempt value result: %v", result[1])
+	}
+
+	return acceptedInt == 1, attempt, nil
 }
 
 func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.JobID, attempt int64, response domain.HTTPResponse, now time.Time) (accepted bool, err error) {
