@@ -19,8 +19,6 @@ const (
 	defaultReadBlock = 5 * time.Second
 )
 
-var ErrInvalidJobMessage = errors.New("invalid job queue message")
-
 type RedisQueue struct {
 	rdb   *goredis.Client
 	count int64
@@ -92,12 +90,12 @@ func (q *RedisQueue) Ack(ctx context.Context, messageID domain.MessageID) error 
 func messageFromRedis(message goredis.XMessage) (*domain.Message, error) {
 	rawJobID, ok := message.Values["job_id"]
 	if !ok {
-		return nil, fmt.Errorf("%w: missing job_id", ErrInvalidJobMessage)
+		return nil, fmt.Errorf("%w: missing job_id", domain.ErrInvalidMessage)
 	}
 
 	jobIDValue, ok := rawJobID.(string)
 	if !ok || jobIDValue == "" {
-		return nil, fmt.Errorf("%w: invalid job_id", ErrInvalidJobMessage)
+		return nil, fmt.Errorf("%w: invalid job_id", domain.ErrInvalidMessage)
 	}
 
 	jobID, err := jobstatedomain.ParseJobID(jobIDValue)
