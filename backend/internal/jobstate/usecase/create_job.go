@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/ports"
 )
@@ -24,15 +23,19 @@ type CreateJobRequest struct {
 }
 
 type CreateJobResponse struct {
-	JobID uuid.UUID
+	JobID domain.JobID
 }
 
 func (uc *CreateJobUseCase) Execute(ctx context.Context, request CreateJobRequest) (*CreateJobResponse, error) {
-	jobID := uuid.New()
+	jobID := domain.NewJobID()
 	now := time.Now().UTC()
 
-	job := domain.NewJob(jobID, request.Request, now)
-	err := uc.repo.CreateAndEnqueue(ctx, job)
+	job, err := domain.NewJob(jobID, request.Request, now)
+	if err != nil {
+		return nil, err
+	}
+
+	err = uc.repo.CreateAndEnqueue(ctx, job)
 	if err != nil {
 		return nil, err
 	}
