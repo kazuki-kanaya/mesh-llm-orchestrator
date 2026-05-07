@@ -12,6 +12,14 @@ func NewJobID() JobID {
 	return JobID(uuid.New())
 }
 
+func ParseJobID(value string) (JobID, error) {
+	id, err := uuid.Parse(value)
+	if err != nil {
+		return JobID(uuid.Nil), ErrInvalidJobID
+	}
+	return JobID(id), nil
+}
+
 func (id JobID) String() string {
 	return uuid.UUID(id).String()
 }

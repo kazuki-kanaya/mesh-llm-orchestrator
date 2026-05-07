@@ -12,6 +12,10 @@ func JobStreamKey() string {
 	return "stream:jobs"
 }
 
+func JobConsumerGroupName() string {
+	return "job-executors"
+}
+
 func RunningJobsKey() string {
 	return "jobs:running"
 }
