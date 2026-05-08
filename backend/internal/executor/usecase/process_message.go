@@ -31,7 +31,7 @@ func (s *Service) ProcessMessage(ctx context.Context, input ProcessMessageInput)
 // or when the job is already terminal. Non-terminal unclaimed messages are left
 // pending so a reconciler can recover them later.
 func (s *Service) executeMessage(ctx context.Context, msg *jobqueuedomain.Message) error {
-	accepted, attempt, err := s.jobState.ClaimAttempt(ctx, msg.JobID)
+	accepted, attempt, err := s.execution.ClaimAttempt(ctx, msg.JobID)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func (s *Service) executeMessage(ctx context.Context, msg *jobqueuedomain.Messag
 		return s.ackIfTerminal(ctx, msg)
 	}
 
-	job, err := s.jobState.Get(ctx, msg.JobID)
+	job, err := s.execution.Get(ctx, msg.JobID)
 	if err != nil {
 		return s.failAndAck(ctx, msg, attempt)
 	}
@@ -53,7 +53,7 @@ func (s *Service) executeMessage(ctx context.Context, msg *jobqueuedomain.Messag
 }
 
 func (s *Service) ackIfTerminal(ctx context.Context, msg *jobqueuedomain.Message) error {
-	job, err := s.jobState.Get(ctx, msg.JobID)
+	job, err := s.execution.Get(ctx, msg.JobID)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (s *Service) ackIfTerminal(ctx context.Context, msg *jobqueuedomain.Message
 }
 
 func (s *Service) failAndAck(ctx context.Context, msg *jobqueuedomain.Message, attempt int64) error {
-	accepted, err := s.jobState.FailAttempt(ctx, msg.JobID, attempt)
+	accepted, err := s.execution.FailAttempt(ctx, msg.JobID, attempt)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (s *Service) completeAndAck(
 	attempt int64,
 	resp *jobstatedomain.HTTPResponse,
 ) error {
-	accepted, err := s.jobState.CompleteAttempt(ctx, msg.JobID, attempt, resp)
+	accepted, err := s.execution.CompleteAttempt(ctx, msg.JobID, attempt, resp)
 	if err != nil {
 		return err
 	}
