@@ -136,7 +136,11 @@ redis.call("PUBLISH", KEYS[2], ARGV[6])
 return 1
 `)
 
-func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.JobID, attempt int64, response domain.HTTPResponse, now time.Time) (accepted bool, err error) {
+func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.JobID, attempt int64, response *domain.HTTPResponse, now time.Time) (accepted bool, err error) {
+	if response == nil {
+		return false, domain.ErrNilHTTPResponse
+	}
+
 	responseBytes, err := json.Marshal(response)
 	if err != nil {
 		return false, err
