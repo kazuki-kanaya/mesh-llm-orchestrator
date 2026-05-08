@@ -9,12 +9,12 @@ import (
 )
 
 type FailAttemptUseCase struct {
-	repo ports.JobRepository
+	store ports.JobStateStore
 }
 
-func NewFailAttemptUseCase(repo ports.JobRepository) *FailAttemptUseCase {
+func NewFailAttemptUseCase(store ports.JobStateStore) *FailAttemptUseCase {
 	return &FailAttemptUseCase{
-		repo: repo,
+		store: store,
 	}
 }
 
@@ -32,7 +32,7 @@ func (uc *FailAttemptUseCase) Execute(ctx context.Context, input FailAttemptInpu
 		return nil, err
 	}
 
-	accepted, err := uc.repo.FailAttempt(ctx, input.JobID, input.Attempt, time.Now().UTC())
+	accepted, err := uc.store.FailAttempt(ctx, input.JobID, input.Attempt, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}

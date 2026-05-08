@@ -8,12 +8,12 @@ import (
 )
 
 type GetUseCase struct {
-	repo ports.JobRepository
+	store ports.JobStateStore
 }
 
-func NewGetUseCase(repo ports.JobRepository) *GetUseCase {
+func NewGetUseCase(store ports.JobStateStore) *GetUseCase {
 	return &GetUseCase{
-		repo: repo,
+		store: store,
 	}
 }
 
@@ -30,7 +30,7 @@ func (uc *GetUseCase) Execute(ctx context.Context, input GetInput) (*GetOutput, 
 		return nil, err
 	}
 
-	job, err := uc.repo.Get(ctx, input.JobID)
+	job, err := uc.store.Get(ctx, input.JobID)
 	if err != nil {
 		return nil, err
 	}

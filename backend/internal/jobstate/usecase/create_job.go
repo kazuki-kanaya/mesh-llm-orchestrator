@@ -9,12 +9,12 @@ import (
 )
 
 type CreateJobUseCase struct {
-	repo ports.JobRepository
+	store ports.JobStateStore
 }
 
-func NewCreateJobUseCase(repo ports.JobRepository) *CreateJobUseCase {
+func NewCreateJobUseCase(store ports.JobStateStore) *CreateJobUseCase {
 	return &CreateJobUseCase{
-		repo: repo,
+		store: store,
 	}
 }
 
@@ -34,7 +34,7 @@ func (uc *CreateJobUseCase) Execute(ctx context.Context, input CreateJobInput) (
 		return nil, err
 	}
 
-	err = uc.repo.CreateAndEnqueue(ctx, job)
+	err = uc.store.CreateAndEnqueue(ctx, job)
 	if err != nil {
 		return nil, err
 	}
