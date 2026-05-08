@@ -11,10 +11,6 @@ type ProcessMessageInput struct {
 	ConsumerName jobqueuedomain.ConsumerName
 }
 
-type ProcessMessageOutput struct {
-	Processed bool
-}
-
 func (s *Service) ProcessMessage(ctx context.Context, input ProcessMessageInput) error {
 	if err := input.ConsumerName.Validate(); err != nil {
 		return err
@@ -28,13 +24,13 @@ func (s *Service) ProcessMessage(ctx context.Context, input ProcessMessageInput)
 		return nil
 	}
 
-	return s.processMessage(ctx, msg)
+	return s.executeMessage(ctx, msg)
 }
 
 // A message is acknowledged only after this executor settles the claimed attempt,
 // or when the job is already terminal. Non-terminal unclaimed messages are left
 // pending so a reconciler can recover them later.
-func (s *Service) processMessage(ctx context.Context, msg *jobqueuedomain.Message) error {
+func (s *Service) executeMessage(ctx context.Context, msg *jobqueuedomain.Message) error {
 	accepted, attempt, err := s.jobState.ClaimAttempt(ctx, msg.JobID)
 	if err != nil {
 		return err
@@ -45,12 +41,12 @@ func (s *Service) processMessage(ctx context.Context, msg *jobqueuedomain.Messag
 
 	job, err := s.jobState.Get(ctx, msg.JobID)
 	if err != nil {
-		return s.failAndAck(ctx, msg, attempt, err)
+		return s.failAndAck(ctx, msg, attempt)
 	}
 
 	resp, err := s.executeRequest(ctx, job.Request)
 	if err != nil {
-		return s.failAndAck(ctx, msg, attempt, err)
+		return s.failAndAck(ctx, msg, attempt)
 	}
 
 	return s.completeAndAck(ctx, msg, attempt, resp)
@@ -69,7 +65,7 @@ func (s *Service) ackIfTerminal(ctx context.Context, msg *jobqueuedomain.Message
 	return s.queue.Ack(ctx, msg.ID)
 }
 
-func (s *Service) failAndAck(ctx context.Context, msg *jobqueuedomain.Message, attempt int64, cause error) error {
+func (s *Service) failAndAck(ctx context.Context, msg *jobqueuedomain.Message, attempt int64) error {
 	accepted, err := s.jobState.FailAttempt(ctx, msg.JobID, attempt)
 	if err != nil {
 		return err
@@ -82,7 +78,7 @@ func (s *Service) failAndAck(ctx context.Context, msg *jobqueuedomain.Message, a
 		return err
 	}
 
-	return cause
+	return nil
 }
 
 func (s *Service) completeAndAck(
