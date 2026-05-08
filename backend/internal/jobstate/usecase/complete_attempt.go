@@ -21,7 +21,7 @@ func NewCompleteAttemptUseCase(repo ports.JobRepository) *CompleteAttemptUseCase
 type CompleteAttemptInput struct {
 	JobID    domain.JobID
 	Attempt  int64
-	Response domain.HTTPResponse
+	Response *domain.HTTPResponse
 }
 
 type CompleteAttemptOutput struct {
@@ -31,6 +31,9 @@ type CompleteAttemptOutput struct {
 func (uc *CompleteAttemptUseCase) Execute(ctx context.Context, input CompleteAttemptInput) (*CompleteAttemptOutput, error) {
 	if err := input.JobID.Validate(); err != nil {
 		return nil, err
+	}
+	if input.Response == nil {
+		return nil, domain.ErrNilHTTPResponse
 	}
 
 	accepted, err := uc.repo.CompleteAttempt(ctx, input.JobID, input.Attempt, input.Response, time.Now().UTC())
