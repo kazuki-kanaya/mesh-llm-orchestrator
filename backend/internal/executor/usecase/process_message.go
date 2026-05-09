@@ -41,6 +41,8 @@ func (s *Service) executeMessage(ctx context.Context, msg *jobqueuedomain.Messag
 
 	job, err := s.execution.Get(ctx, msg.JobID)
 	if err != nil {
+		// Once an attempt is claimed, failing to load its request is treated as
+		// an internal execution failure rather than leaving it for recovery.
 		return s.failAndAck(ctx, msg, attempt)
 	}
 
