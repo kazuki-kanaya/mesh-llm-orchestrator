@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package jobstate.v1;
 
-option go_package = "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/gen/jobstate/v1;jobstatev1";
+option go_package = "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/gen/go/jobstate/v1;jobstatev1";
 
 import "google/protobuf/timestamp.proto";
 

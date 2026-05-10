@@ -962,7 +962,7 @@ const file_jobstate_v1_jobstate_proto_rawDesc = "" +
 	"\x0fCompleteAttempt\x12#.jobstate.v1.CompleteAttemptRequest\x1a$.jobstate.v1.CompleteAttemptResponse\x12P\n" +
 	"\vFailAttempt\x12\x1f.jobstate.v1.FailAttemptRequest\x1a .jobstate.v1.FailAttemptResponse\x12q\n" +
 	"\x16RecoverStaleAndEnqueue\x12*.jobstate.v1.RecoverStaleAndEnqueueRequest\x1a+.jobstate.v1.RecoverStaleAndEnqueueResponse\x128\n" +
-	"\x03Get\x12\x17.jobstate.v1.GetRequest\x1a\x18.jobstate.v1.GetResponseBSZQgithub.com/kazuki-kanaya/mesh-llm-orchestrator/backend/gen/jobstate/v1;jobstatev1b\x06proto3"
+	"\x03Get\x12\x17.jobstate.v1.GetRequest\x1a\x18.jobstate.v1.GetResponseBVZTgithub.com/kazuki-kanaya/mesh-llm-orchestrator/backend/gen/go/jobstate/v1;jobstatev1b\x06proto3"
 
 var (
 	file_jobstate_v1_jobstate_proto_rawDescOnce sync.Once
