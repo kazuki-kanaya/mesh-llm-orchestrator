@@ -1,4 +1,4 @@
-package redis
+package platformredis
 
 type Config struct {
 	Addr     string

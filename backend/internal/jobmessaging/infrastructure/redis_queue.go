@@ -10,8 +10,8 @@ import (
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
 	jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
-	goredis "github.com/redis/go-redis/v9"
+	platformredis "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -21,10 +21,10 @@ const (
 )
 
 type RedisQueue struct {
-	rdb *goredis.Client
+	rdb *redis.Client
 }
 
-func NewRedisQueue(rdb *goredis.Client) ports.JobQueue {
+func NewRedisQueue(rdb *redis.Client) ports.JobQueue {
 	return &RedisQueue{
 		rdb: rdb,
 	}
@@ -33,8 +33,8 @@ func NewRedisQueue(rdb *goredis.Client) ports.JobQueue {
 func (q *RedisQueue) EnsureGroup(ctx context.Context) error {
 	err := q.rdb.XGroupCreateMkStream(
 		ctx,
-		redis.JobStreamKey(),
-		redis.JobConsumerGroupName(),
+		platformredis.JobStreamKey(),
+		platformredis.JobConsumerGroupName(),
 		"0",
 	).Err()
 	if err == nil {
@@ -51,15 +51,15 @@ func (q *RedisQueue) Read(ctx context.Context, consumerName domain.ConsumerName)
 		return nil, err
 	}
 
-	streams, err := q.rdb.XReadGroup(ctx, &goredis.XReadGroupArgs{
-		Group:    redis.JobConsumerGroupName(),
+	streams, err := q.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
+		Group:    platformredis.JobConsumerGroupName(),
 		Consumer: consumerName.String(),
-		Streams:  []string{redis.JobStreamKey(), ">"},
+		Streams:  []string{platformredis.JobStreamKey(), ">"},
 		Count:    defaultReadCount,
 		Block:    defaultReadBlock,
 	}).Result()
 	if err != nil {
-		if errors.Is(err, goredis.Nil) {
+		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
 		return nil, err
@@ -84,9 +84,9 @@ func (q *RedisQueue) ClaimStalePending(ctx context.Context, consumerName domain.
 
 	// Start from the beginning for now. If the pending list grows large,
 	// expose the XAUTOCLAIM cursor to avoid repeatedly scanning from "0-0".
-	messages, _, err := q.rdb.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
-		Stream:   redis.JobStreamKey(),
-		Group:    redis.JobConsumerGroupName(),
+	messages, _, err := q.rdb.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+		Stream:   platformredis.JobStreamKey(),
+		Group:    platformredis.JobConsumerGroupName(),
 		Consumer: consumerName.String(),
 		MinIdle:  minIdle,
 		Start:    xAutoClaimStart,
@@ -115,13 +115,13 @@ func (q *RedisQueue) Ack(ctx context.Context, messageID domain.MessageID) error 
 
 	return q.rdb.XAck(
 		ctx,
-		redis.JobStreamKey(),
-		redis.JobConsumerGroupName(),
+		platformredis.JobStreamKey(),
+		platformredis.JobConsumerGroupName(),
 		messageID.String(),
 	).Err()
 }
 
-func messageFromRedis(message goredis.XMessage) (*domain.Message, error) {
+func messageFromRedis(message redis.XMessage) (*domain.Message, error) {
 	rawJobID, ok := message.Values["job_id"]
 	if !ok {
 		return nil, fmt.Errorf("%w: missing job_id", domain.ErrInvalidMessage)

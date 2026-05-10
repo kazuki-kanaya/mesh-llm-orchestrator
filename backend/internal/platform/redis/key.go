@@ -1,4 +1,4 @@
-package redis
+package platformredis
 
 func JobKey(jobID string) string {
 	return "job:" + jobID

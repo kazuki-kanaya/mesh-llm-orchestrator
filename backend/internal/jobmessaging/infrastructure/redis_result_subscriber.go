@@ -6,8 +6,8 @@ import (
 
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
 	jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
-	goredis "github.com/redis/go-redis/v9"
+	platformredis "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -16,13 +16,13 @@ var (
 )
 
 type RedisResultSubscriber struct {
-	rdb *goredis.Client
+	rdb *redis.Client
 }
 
 var _ ports.JobResultSubscriber = (*RedisResultSubscriber)(nil)
 var _ ports.JobResultSubscription = (*redisResultSubscription)(nil)
 
-func NewRedisResultSubscriber(rdb *goredis.Client) (ports.JobResultSubscriber, error) {
+func NewRedisResultSubscriber(rdb *redis.Client) (ports.JobResultSubscriber, error) {
 	if rdb == nil {
 		return nil, ErrNilRedisClient
 	}
@@ -37,7 +37,7 @@ func (s *RedisResultSubscriber) Subscribe(ctx context.Context, jobID jobstatedom
 		return nil, err
 	}
 
-	pubsub := s.rdb.Subscribe(ctx, redis.JobResultChannel(jobID.String()))
+	pubsub := s.rdb.Subscribe(ctx, platformredis.JobResultChannel(jobID.String()))
 	if _, err := pubsub.Receive(ctx); err != nil {
 		_ = pubsub.Close()
 		return nil, err
@@ -50,8 +50,8 @@ func (s *RedisResultSubscriber) Subscribe(ctx context.Context, jobID jobstatedom
 }
 
 type redisResultSubscription struct {
-	pubsub *goredis.PubSub
-	ch     <-chan *goredis.Message
+	pubsub *redis.PubSub
+	ch     <-chan *redis.Message
 }
 
 func (s *redisResultSubscription) Wait(ctx context.Context) error {
