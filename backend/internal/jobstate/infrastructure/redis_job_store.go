@@ -20,7 +20,7 @@ const jobResultPayload = "done"
 
 var ErrNilRedisClient = errors.New("redis client is nil")
 
-func NewRedisJobRepository(rdb *goredis.Client) (*RedisJobRepository, error) {
+func NewRedisJobStore(rdb *goredis.Client) (*RedisJobRepository, error) {
 	if rdb == nil {
 		return nil, ErrNilRedisClient
 	}
