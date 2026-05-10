@@ -8,29 +8,29 @@ import (
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/ports"
 )
 
-type CreateJobUseCase struct {
+type CreateAndEnqueueUseCase struct {
 	store ports.JobStateStore
 }
 
-func NewCreateJobUseCase(store ports.JobStateStore) (*CreateJobUseCase, error) {
+func NewCreateAndEnqueueUseCase(store ports.JobStateStore) (*CreateAndEnqueueUseCase, error) {
 	if store == nil {
 		return nil, ErrNilJobStateStore
 	}
 
-	return &CreateJobUseCase{
+	return &CreateAndEnqueueUseCase{
 		store: store,
 	}, nil
 }
 
-type CreateJobInput struct {
+type CreateAndEnqueueInput struct {
 	Request domain.HTTPRequest
 }
 
-type CreateJobOutput struct {
+type CreateAndEnqueueOutput struct {
 	JobID domain.JobID
 }
 
-func (uc *CreateJobUseCase) Execute(ctx context.Context, input CreateJobInput) (*CreateJobOutput, error) {
+func (uc *CreateAndEnqueueUseCase) Execute(ctx context.Context, input CreateAndEnqueueInput) (*CreateAndEnqueueOutput, error) {
 	jobID := domain.NewJobID()
 
 	job, err := domain.NewJob(jobID, input.Request, time.Now().UTC())
@@ -43,7 +43,7 @@ func (uc *CreateJobUseCase) Execute(ctx context.Context, input CreateJobInput) (
 		return nil, err
 	}
 
-	return &CreateJobOutput{
+	return &CreateAndEnqueueOutput{
 		JobID: jobID,
 	}, nil
 }

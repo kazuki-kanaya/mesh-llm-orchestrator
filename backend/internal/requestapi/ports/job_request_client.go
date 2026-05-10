@@ -7,6 +7,6 @@ import (
 )
 
 type JobRequestClient interface {
-	CreateAndEnqueue(ctx context.Context, job *jobstatedomain.Job) error
+	CreateAndEnqueue(ctx context.Context, request jobstatedomain.HTTPRequest) (jobstatedomain.JobID, error)
 	Wait(ctx context.Context, jobID jobstatedomain.JobID) (*jobstatedomain.Job, error)
 }
