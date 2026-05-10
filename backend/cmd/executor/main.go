@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,6 +21,8 @@ func main() {
 		JobStateGRPCAddr: mustGetEnv("JOBSTATE_GRPC_ADDR"),
 		ConsumerName:     mustGetEnv("EXECUTOR_CONSUMER_NAME"),
 		RetryBackoff:     mustDurationEnv("EXECUTOR_RETRY_BACKOFF"),
+		RequestTimeout:   mustDurationEnv("EXECUTOR_REQUEST_TIMEOUT"),
+		MaxResponseBytes: mustInt64Env("EXECUTOR_MAX_RESPONSE_BYTES"),
 	}); err != nil {
 		log.Fatal(err)
 	}
@@ -40,4 +43,13 @@ func mustDurationEnv(key string) time.Duration {
 		log.Fatalf("%s must be a positive duration: %q", key, value)
 	}
 	return duration
+}
+
+func mustInt64Env(key string) int64 {
+	value := mustGetEnv(key)
+	n, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || n <= 0 {
+		log.Fatalf("%s must be a positive integer: %q", key, value)
+	}
+	return n
 }

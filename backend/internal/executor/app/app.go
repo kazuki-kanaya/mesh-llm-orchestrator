@@ -18,10 +18,12 @@ import (
 )
 
 var (
-	ErrEmptyRedisAddr       = errors.New("redis addr is empty")
-	ErrEmptyJobStateAddress = errors.New("jobstate grpc addr is empty")
-	ErrEmptyConsumerName    = errors.New("consumer name is empty")
-	ErrInvalidRetryBackoff  = errors.New("retry backoff must be positive")
+	ErrEmptyRedisAddr          = errors.New("redis addr is empty")
+	ErrEmptyJobStateAddress    = errors.New("jobstate grpc addr is empty")
+	ErrEmptyConsumerName       = errors.New("consumer name is empty")
+	ErrInvalidRetryBackoff     = errors.New("retry backoff must be positive")
+	ErrInvalidRequestTimeout   = errors.New("request timeout must be positive")
+	ErrInvalidMaxResponseBytes = errors.New("max response bytes must be positive")
 )
 
 type Config struct {
@@ -29,6 +31,8 @@ type Config struct {
 	JobStateGRPCAddr string
 	ConsumerName     string
 	RetryBackoff     time.Duration
+	RequestTimeout   time.Duration
+	MaxResponseBytes int64
 }
 
 func Run(ctx context.Context, cfg Config) error {
@@ -43,6 +47,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.RetryBackoff <= 0 {
 		return ErrInvalidRetryBackoff
+	}
+	if cfg.RequestTimeout <= 0 {
+		return ErrInvalidRequestTimeout
+	}
+	if cfg.MaxResponseBytes <= 0 {
+		return ErrInvalidMaxResponseBytes
 	}
 
 	rdb, err := platformredis.NewClient(ctx, platformredis.Config{
@@ -69,12 +79,12 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	httpClient, err := executorinfra.NewHTTPClient(http.DefaultClient)
+	httpClient, err := executorinfra.NewHTTPClient(http.DefaultClient, cfg.MaxResponseBytes)
 	if err != nil {
 		return err
 	}
 
-	processMessage, err := executorusecase.NewProcessMessageUseCase(queue, jobExecutionClient, httpClient)
+	processMessage, err := executorusecase.NewProcessMessageUseCase(queue, jobExecutionClient, httpClient, cfg.RequestTimeout)
 	if err != nil {
 		return err
 	}

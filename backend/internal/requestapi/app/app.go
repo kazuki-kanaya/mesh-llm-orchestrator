@@ -18,6 +18,12 @@ import (
 )
 
 const shutdownTimeout = 5 * time.Second
+const (
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 15 * time.Second
+	writeTimeout      = 35 * time.Second
+	idleTimeout       = 60 * time.Second
+)
 
 var (
 	ErrEmptyRedisAddr       = errors.New("redis addr is empty")
@@ -87,8 +93,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	server := &http.Server{
-		Addr:    cfg.HTTPAddr,
-		Handler: handler,
+		Addr:              cfg.HTTPAddr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	go func() {

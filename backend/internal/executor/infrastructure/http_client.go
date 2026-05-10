@@ -11,21 +11,30 @@ import (
 	jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 )
 
-var ErrNilHTTPClient = errors.New("http client is nil")
+var (
+	ErrNilHTTPClient            = errors.New("http client is nil")
+	ErrInvalidMaxResponseBytes  = errors.New("max response bytes must be positive")
+	ErrUpstreamResponseTooLarge = errors.New("upstream response body is too large")
+)
 
 type HTTPClient struct {
-	client *http.Client
+	client           *http.Client
+	maxResponseBytes int64
 }
 
 var _ ports.HTTPClient = (*HTTPClient)(nil)
 
-func NewHTTPClient(client *http.Client) (ports.HTTPClient, error) {
+func NewHTTPClient(client *http.Client, maxResponseBytes int64) (ports.HTTPClient, error) {
 	if client == nil {
 		return nil, ErrNilHTTPClient
 	}
+	if maxResponseBytes <= 0 {
+		return nil, ErrInvalidMaxResponseBytes
+	}
 
 	return &HTTPClient{
-		client: client,
+		client:           client,
+		maxResponseBytes: maxResponseBytes,
 	}, nil
 }
 
@@ -46,9 +55,12 @@ func (c *HTTPClient) Do(ctx context.Context, req jobstatedomain.HTTPRequest) (*j
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(body)) > c.maxResponseBytes {
+		return nil, ErrUpstreamResponseTooLarge
 	}
 
 	return &jobstatedomain.HTTPResponse{

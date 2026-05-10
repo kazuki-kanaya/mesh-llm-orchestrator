@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/executor/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/executor/ports"
@@ -15,18 +16,21 @@ var (
 	ErrNilJobQueue           = errors.New("job queue is nil")
 	ErrNilJobExecutionClient = errors.New("job execution client is nil")
 	ErrNilHTTPClient         = errors.New("http client is nil")
+	ErrInvalidRequestTimeout = errors.New("request timeout must be positive")
 )
 
 type ProcessMessageUseCase struct {
 	queue              jobmessagingports.JobQueue
 	jobExecutionClient ports.JobExecutionClient
 	httpClient         ports.HTTPClient
+	requestTimeout     time.Duration
 }
 
 func NewProcessMessageUseCase(
 	queue jobmessagingports.JobQueue,
 	jobExecutionClient ports.JobExecutionClient,
 	httpClient ports.HTTPClient,
+	requestTimeout time.Duration,
 ) (*ProcessMessageUseCase, error) {
 	if queue == nil {
 		return nil, ErrNilJobQueue
@@ -37,11 +41,15 @@ func NewProcessMessageUseCase(
 	if httpClient == nil {
 		return nil, ErrNilHTTPClient
 	}
+	if requestTimeout <= 0 {
+		return nil, ErrInvalidRequestTimeout
+	}
 
 	return &ProcessMessageUseCase{
 		queue:              queue,
 		jobExecutionClient: jobExecutionClient,
 		httpClient:         httpClient,
+		requestTimeout:     requestTimeout,
 	}, nil
 }
 
@@ -131,7 +139,10 @@ func (uc *ProcessMessageUseCase) completeAndAck(
 }
 
 func (uc *ProcessMessageUseCase) executeRequest(ctx context.Context, req jobstatedomain.HTTPRequest) (*jobstatedomain.HTTPResponse, error) {
-	resp, err := uc.httpClient.Do(ctx, req)
+	requestCtx, cancel := context.WithTimeout(ctx, uc.requestTimeout)
+	defer cancel()
+
+	resp, err := uc.httpClient.Do(requestCtx, req)
 	if err != nil {
 		return nil, err
 	}
