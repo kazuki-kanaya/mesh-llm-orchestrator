@@ -17,11 +17,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const shutdownTimeout = 5 * time.Second
 const (
 	readHeaderTimeout = 5 * time.Second
 	readTimeout       = 15 * time.Second
-	writeTimeout      = 35 * time.Second
 	idleTimeout       = 60 * time.Second
 )
 
@@ -92,6 +90,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
+	writeTimeout := cfg.WaitTimeout + 5*time.Second
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           handler,
@@ -103,7 +102,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), writeTimeout)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			log.Printf("failed to shutdown requestapi: %v", err)
