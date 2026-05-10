@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/domain"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/domain"
 )
 
 type JobQueue interface {

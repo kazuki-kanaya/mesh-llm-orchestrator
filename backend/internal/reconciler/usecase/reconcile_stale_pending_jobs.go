@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	jobqueuedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/domain"
-	jobqueueports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/ports"
+	jobmessagingdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/domain"
+	jobmessagingports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/reconciler/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/reconciler/ports"
 )
@@ -17,14 +17,14 @@ var (
 )
 
 type ReconcileStalePendingJobsUseCase struct {
-	queue      jobqueueports.JobQueue
+	queue      jobmessagingports.JobQueue
 	client     ports.JobReconcileClient
 	staleAfter time.Duration
 	batchSize  int64
 }
 
 func NewReconcileStalePendingJobsUseCase(
-	queue jobqueueports.JobQueue,
+	queue jobmessagingports.JobQueue,
 	client ports.JobReconcileClient,
 	staleAfter time.Duration,
 	batchSize int64,
@@ -51,7 +51,7 @@ func NewReconcileStalePendingJobsUseCase(
 }
 
 type ReconcileStalePendingJobsInput struct {
-	ConsumerName jobqueuedomain.ConsumerName
+	ConsumerName jobmessagingdomain.ConsumerName
 }
 
 type ReconcileStalePendingJobsOutput struct {

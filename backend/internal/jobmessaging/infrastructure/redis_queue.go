@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/domain"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/ports"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/domain"
+	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
 	jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
 	goredis "github.com/redis/go-redis/v9"

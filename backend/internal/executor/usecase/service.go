@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/executor/ports"
-	jobqueueports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/ports"
+	jobmessagingports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
 )
 
 var (
@@ -14,12 +14,12 @@ var (
 )
 
 type Service struct {
-	queue              jobqueueports.JobQueue
+	queue              jobmessagingports.JobQueue
 	jobExecutionClient ports.JobExecutionClient
 	httpClient         ports.HTTPClient
 }
 
-func NewService(queue jobqueueports.JobQueue, jobExecutionClient ports.JobExecutionClient, httpClient ports.HTTPClient) (*Service, error) {
+func NewService(queue jobmessagingports.JobQueue, jobExecutionClient ports.JobExecutionClient, httpClient ports.HTTPClient) (*Service, error) {
 	if queue == nil {
 		return nil, ErrNilJobQueue
 	}

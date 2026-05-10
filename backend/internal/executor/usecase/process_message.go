@@ -3,12 +3,12 @@ package usecase
 import (
 	"context"
 
-	jobqueuedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/domain"
+	jobmessagingdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/domain"
 	jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 )
 
 type ProcessMessageInput struct {
-	ConsumerName jobqueuedomain.ConsumerName
+	ConsumerName jobmessagingdomain.ConsumerName
 }
 
 func (s *Service) ProcessMessage(ctx context.Context, input ProcessMessageInput) error {
@@ -30,7 +30,7 @@ func (s *Service) ProcessMessage(ctx context.Context, input ProcessMessageInput)
 // A message is acknowledged only after this executor settles the claimed attempt,
 // or when the job is already terminal. Non-terminal unclaimed messages are left
 // pending so a reconciler can recover them later.
-func (s *Service) executeMessage(ctx context.Context, msg *jobqueuedomain.Message) error {
+func (s *Service) executeMessage(ctx context.Context, msg *jobmessagingdomain.Message) error {
 	accepted, attempt, err := s.jobExecutionClient.ClaimAttempt(ctx, msg.JobID)
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func (s *Service) executeMessage(ctx context.Context, msg *jobqueuedomain.Messag
 	return s.completeAndAck(ctx, msg, attempt, resp)
 }
 
-func (s *Service) ackIfTerminal(ctx context.Context, msg *jobqueuedomain.Message) error {
+func (s *Service) ackIfTerminal(ctx context.Context, msg *jobmessagingdomain.Message) error {
 	job, err := s.jobExecutionClient.Get(ctx, msg.JobID)
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func (s *Service) ackIfTerminal(ctx context.Context, msg *jobqueuedomain.Message
 	return s.queue.Ack(ctx, msg.ID)
 }
 
-func (s *Service) failAndAck(ctx context.Context, msg *jobqueuedomain.Message, attempt int64) error {
+func (s *Service) failAndAck(ctx context.Context, msg *jobmessagingdomain.Message, attempt int64) error {
 	accepted, err := s.jobExecutionClient.FailAttempt(ctx, msg.JobID, attempt)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (s *Service) failAndAck(ctx context.Context, msg *jobqueuedomain.Message, a
 
 func (s *Service) completeAndAck(
 	ctx context.Context,
-	msg *jobqueuedomain.Message,
+	msg *jobmessagingdomain.Message,
 	attempt int64,
 	resp *jobstatedomain.HTTPResponse,
 ) error {
