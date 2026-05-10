@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	ErrNilJobQueue      = errors.New("job queue is nil")
-	ErrNilJobStateStore = errors.New("job state store is nil")
+	ErrNilJobQueue          = errors.New("job queue is nil")
+	ErrNilStaleJobRecoverer = errors.New("stale job recoverer is nil")
 )
 
 type ReconcileStalePendingJobsUseCase struct {
@@ -33,7 +33,7 @@ func NewReconcileStalePendingJobsUseCase(
 		return nil, ErrNilJobQueue
 	}
 	if recoverer == nil {
-		return nil, ErrNilJobStateStore
+		return nil, ErrNilStaleJobRecoverer
 	}
 	if staleAfter <= 0 {
 		return nil, domain.ErrInvalidStaleAfter

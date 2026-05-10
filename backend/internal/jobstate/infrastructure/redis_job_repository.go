@@ -79,7 +79,7 @@ local attempt = redis.call("HINCRBY", KEYS[1], "current_attempt", 1)
 redis.call("HSET", KEYS[1],
 	"status", ARGV[2],
 	"started_at", ARGV[3],
-	"started_at_unix", ARGV[4]
+	"started_at_unix_milli", ARGV[4]
 )
 
 return {1, attempt}
@@ -95,7 +95,7 @@ func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobI
 		domain.StatusQueued.String(),
 		domain.StatusRunning.String(),
 		now.UTC().Format(time.RFC3339Nano),
-		now.UTC().Unix(),
+		now.UTC().UnixMilli(),
 	).Slice()
 	if err != nil {
 		return false, 0, err
@@ -220,17 +220,17 @@ if status ~= ARGV[3] then
 	return 0
 end
 
-local started_at_unix = redis.call("HGET", KEYS[1], "started_at_unix")
-if not started_at_unix then
+local started_at_unix_milli = redis.call("HGET", KEYS[1], "started_at_unix_milli")
+if not started_at_unix_milli then
 	return 0
 end
 
-if tonumber(started_at_unix) > tonumber(ARGV[4]) then
+if tonumber(started_at_unix_milli) > tonumber(ARGV[4]) then
 	return 0
 end
 
 redis.call("HSET", KEYS[1], "status", ARGV[5])
-redis.call("HDEL", KEYS[1], "started_at", "started_at_unix")
+redis.call("HDEL", KEYS[1], "started_at", "started_at_unix_milli")
 redis.call("XADD", KEYS[2], "*", "job_id", ARGV[6])
 
 return 1
@@ -251,7 +251,7 @@ func (r *RedisJobRepository) RecoverStaleAndEnqueue(ctx context.Context, jobID d
 		domain.StatusCompleted.String(),
 		domain.StatusFailed.String(),
 		domain.StatusRunning.String(),
-		cutoff.UTC().Unix(),
+		cutoff.UTC().UnixMilli(),
 		domain.StatusQueued.String(),
 		jobID.String(),
 	).Int()
