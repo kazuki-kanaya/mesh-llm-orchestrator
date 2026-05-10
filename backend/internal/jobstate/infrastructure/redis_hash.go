@@ -31,6 +31,7 @@ func ToRedisHash(job *domain.Job) (map[string]any, error) {
 
 	if job.StartedAt != nil {
 		values["started_at"] = job.StartedAt.Format(time.RFC3339Nano)
+		values["started_at_unix_milli"] = job.StartedAt.UnixMilli()
 	}
 
 	if job.TerminatedAt != nil {

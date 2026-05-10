@@ -78,7 +78,8 @@ end
 local attempt = redis.call("HINCRBY", KEYS[1], "current_attempt", 1)
 redis.call("HSET", KEYS[1],
 	"status", ARGV[2],
-	"started_at", ARGV[3]
+	"started_at", ARGV[3],
+	"started_at_unix_milli", ARGV[4]
 )
 
 return {1, attempt}
@@ -94,6 +95,7 @@ func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobI
 		domain.StatusQueued.String(),
 		domain.StatusRunning.String(),
 		now.UTC().Format(time.RFC3339Nano),
+		now.UTC().UnixMilli(),
 	).Slice()
 	if err != nil {
 		return false, 0, err
@@ -205,6 +207,62 @@ func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID
 	}
 
 	return result == 1, nil
+}
+
+var recoverStaleAndEnqueueScript = goredis.NewScript(`
+local status = redis.call("HGET", KEYS[1], "status")
+
+if status == ARGV[1] or status == ARGV[2] then
+	return 2
+end
+
+if status ~= ARGV[3] then
+	return 0
+end
+
+local started_at_unix_milli = redis.call("HGET", KEYS[1], "started_at_unix_milli")
+if not started_at_unix_milli then
+	return 0
+end
+
+if tonumber(started_at_unix_milli) > tonumber(ARGV[4]) then
+	return 0
+end
+
+redis.call("HSET", KEYS[1], "status", ARGV[5])
+redis.call("HDEL", KEYS[1], "started_at", "started_at_unix_milli")
+redis.call("XADD", KEYS[2], "*", "job_id", ARGV[6])
+
+return 1
+`)
+
+func (r *RedisJobRepository) RecoverStaleAndEnqueue(ctx context.Context, jobID domain.JobID, cutoff time.Time) (domain.StaleJobRecoveryResult, error) {
+	if err := jobID.Validate(); err != nil {
+		return domain.StaleJobRecoveryResult{}, err
+	}
+
+	result, err := recoverStaleAndEnqueueScript.Run(
+		ctx,
+		r.rdb,
+		[]string{
+			redis.JobKey(jobID.String()),
+			redis.JobStreamKey(),
+		},
+		domain.StatusCompleted.String(),
+		domain.StatusFailed.String(),
+		domain.StatusRunning.String(),
+		cutoff.UTC().UnixMilli(),
+		domain.StatusQueued.String(),
+		jobID.String(),
+	).Int()
+	if err != nil {
+		return domain.StaleJobRecoveryResult{}, err
+	}
+
+	return domain.StaleJobRecoveryResult{
+		Recovered: result == 1,
+		Terminal:  result == 2,
+	}, nil
 }
 
 func (r *RedisJobRepository) Get(ctx context.Context, jobID domain.JobID) (*domain.Job, error) {

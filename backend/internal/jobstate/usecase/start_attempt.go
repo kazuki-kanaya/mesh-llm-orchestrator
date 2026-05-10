@@ -9,12 +9,12 @@ import (
 )
 
 type StartAttemptUseCase struct {
-	repo ports.JobRepository
+	store ports.JobStateStore
 }
 
-func NewStartAttemptUseCase(repo ports.JobRepository) *StartAttemptUseCase {
+func NewStartAttemptUseCase(store ports.JobStateStore) *StartAttemptUseCase {
 	return &StartAttemptUseCase{
-		repo: repo,
+		store: store,
 	}
 }
 
@@ -32,7 +32,7 @@ func (uc *StartAttemptUseCase) Execute(ctx context.Context, input StartAttemptIn
 		return nil, err
 	}
 
-	accepted, attempt, err := uc.repo.StartAttempt(ctx, input.JobID, time.Now().UTC())
+	accepted, attempt, err := uc.store.StartAttempt(ctx, input.JobID, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}

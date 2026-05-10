@@ -9,12 +9,12 @@ import (
 )
 
 type CompleteAttemptUseCase struct {
-	repo ports.JobRepository
+	store ports.JobStateStore
 }
 
-func NewCompleteAttemptUseCase(repo ports.JobRepository) *CompleteAttemptUseCase {
+func NewCompleteAttemptUseCase(store ports.JobStateStore) *CompleteAttemptUseCase {
 	return &CompleteAttemptUseCase{
-		repo: repo,
+		store: store,
 	}
 }
 
@@ -36,7 +36,7 @@ func (uc *CompleteAttemptUseCase) Execute(ctx context.Context, input CompleteAtt
 		return nil, domain.ErrNilHTTPResponse
 	}
 
-	accepted, err := uc.repo.CompleteAttempt(ctx, input.JobID, input.Attempt, input.Response, time.Now().UTC())
+	accepted, err := uc.store.CompleteAttempt(ctx, input.JobID, input.Attempt, input.Response, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}

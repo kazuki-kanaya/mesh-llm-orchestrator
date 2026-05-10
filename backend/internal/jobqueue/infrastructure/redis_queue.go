@@ -17,6 +17,7 @@ import (
 const (
 	defaultReadCount = int64(1)
 	defaultReadBlock = 5 * time.Second
+	xAutoClaimStart  = "0-0"
 )
 
 type RedisQueue struct {
@@ -68,6 +69,41 @@ func (q *RedisQueue) Read(ctx context.Context, consumerName domain.ConsumerName)
 	}
 
 	return messageFromRedis(streams[0].Messages[0])
+}
+
+func (q *RedisQueue) ClaimStalePending(ctx context.Context, consumerName domain.ConsumerName, minIdle time.Duration, count int64) ([]*domain.Message, error) {
+	if err := consumerName.Validate(); err != nil {
+		return nil, err
+	}
+	if minIdle <= 0 {
+		return nil, fmt.Errorf("min idle must be positive: %s", minIdle)
+	}
+	if count <= 0 {
+		return nil, fmt.Errorf("count must be positive: %d", count)
+	}
+
+	messages, _, err := q.rdb.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
+		Stream:   redis.JobStreamKey(),
+		Group:    redis.JobConsumerGroupName(),
+		Consumer: consumerName.String(),
+		MinIdle:  minIdle,
+		Start:    xAutoClaimStart,
+		Count:    count,
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Message, 0, len(messages))
+	for _, message := range messages {
+		msg, err := messageFromRedis(message)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, msg)
+	}
+
+	return result, nil
 }
 
 func (q *RedisQueue) Ack(ctx context.Context, messageID domain.MessageID) error {
