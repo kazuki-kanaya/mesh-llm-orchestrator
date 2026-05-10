@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,12 +18,20 @@ type RedisJobRepository struct {
 
 const jobResultPayload = "done"
 
-func NewRedisJobRepository(rdb *goredis.Client) *RedisJobRepository {
+var ErrNilRedisClient = errors.New("redis client is nil")
+
+func NewRedisJobRepository(rdb *goredis.Client) (*RedisJobRepository, error) {
+	if rdb == nil {
+		return nil, ErrNilRedisClient
+	}
+
 	return &RedisJobRepository{
 		rdb: rdb,
-	}
+	}, nil
 }
 
+// Keep this field list in sync with ToRedisHash. Creation is scripted so the
+// job hash and initial stream message are written atomically.
 var createAndEnqueueScript = goredis.NewScript(`
 if redis.call("EXISTS", KEYS[1]) == 1 then
 	return 0

@@ -11,10 +11,14 @@ type GetUseCase struct {
 	store ports.JobStateStore
 }
 
-func NewGetUseCase(store ports.JobStateStore) *GetUseCase {
+func NewGetUseCase(store ports.JobStateStore) (*GetUseCase, error) {
+	if store == nil {
+		return nil, ErrNilJobStateStore
+	}
+
 	return &GetUseCase{
 		store: store,
-	}
+	}, nil
 }
 
 type GetInput struct {

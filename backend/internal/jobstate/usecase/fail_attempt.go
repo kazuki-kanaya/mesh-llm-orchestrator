@@ -12,10 +12,14 @@ type FailAttemptUseCase struct {
 	store ports.JobStateStore
 }
 
-func NewFailAttemptUseCase(store ports.JobStateStore) *FailAttemptUseCase {
+func NewFailAttemptUseCase(store ports.JobStateStore) (*FailAttemptUseCase, error) {
+	if store == nil {
+		return nil, ErrNilJobStateStore
+	}
+
 	return &FailAttemptUseCase{
 		store: store,
-	}
+	}, nil
 }
 
 type FailAttemptInput struct {
