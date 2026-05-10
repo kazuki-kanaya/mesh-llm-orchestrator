@@ -1,4 +1,4 @@
-package presentation
+package requestapihttp
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 var (
 	ErrNilProxyRequestUseCase = errors.New("proxy request usecase is nil")
 	ErrInvalidWaitTimeout     = errors.New("wait timeout must be positive")
+	ErrInvalidTargetBaseURL   = errors.New("target base url must include scheme and host")
 )
 
 type ProxyHandler struct {
@@ -37,7 +38,7 @@ func NewProxyHandler(proxyRequest *usecase.ProxyRequestUseCase, targetBaseURL st
 		return nil, err
 	}
 	if targetBase.Scheme == "" || targetBase.Host == "" {
-		return nil, errors.New("target base url must include scheme and host")
+		return nil, ErrInvalidTargetBaseURL
 	}
 
 	return &ProxyHandler{

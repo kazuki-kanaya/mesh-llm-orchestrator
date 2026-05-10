@@ -8,19 +8,19 @@ import (
 	"time"
 
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
-	goredis "github.com/redis/go-redis/v9"
+	platformredis "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisJobRepository struct {
-	rdb *goredis.Client
+	rdb *redis.Client
 }
 
 const jobResultPayload = "done"
 
 var ErrNilRedisClient = errors.New("redis client is nil")
 
-func NewRedisJobRepository(rdb *goredis.Client) (*RedisJobRepository, error) {
+func NewRedisJobStore(rdb *redis.Client) (*RedisJobRepository, error) {
 	if rdb == nil {
 		return nil, ErrNilRedisClient
 	}
@@ -32,7 +32,7 @@ func NewRedisJobRepository(rdb *goredis.Client) (*RedisJobRepository, error) {
 
 // Keep this field list in sync with ToRedisHash. Creation is scripted so the
 // job hash and initial stream message are written atomically.
-var createAndEnqueueScript = goredis.NewScript(`
+var createAndEnqueueScript = redis.NewScript(`
 if redis.call("EXISTS", KEYS[1]) == 1 then
 	return 0
 end
@@ -60,8 +60,8 @@ func (r *RedisJobRepository) CreateAndEnqueue(ctx context.Context, job *domain.J
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(job.ID.String()),
-			redis.JobStreamKey(),
+			platformredis.JobKey(job.ID.String()),
+			platformredis.JobStreamKey(),
 		},
 		values["status"],
 		values["request"],
@@ -79,7 +79,7 @@ func (r *RedisJobRepository) CreateAndEnqueue(ctx context.Context, job *domain.J
 	return nil
 }
 
-var startAttemptScript = goredis.NewScript(`
+var startAttemptScript = redis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") ~= ARGV[1] then
 	return {0, 0}
 end
@@ -99,7 +99,7 @@ func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobI
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(jobID.String()),
+			platformredis.JobKey(jobID.String()),
 		},
 		domain.StatusQueued.String(),
 		domain.StatusRunning.String(),
@@ -127,7 +127,7 @@ func (r *RedisJobRepository) StartAttempt(ctx context.Context, jobID domain.JobI
 	return acceptedInt == 1, attempt, nil
 }
 
-var completeAttemptScript = goredis.NewScript(`
+var completeAttemptScript = redis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") ~= ARGV[1] then
 	return 0
 end
@@ -161,8 +161,8 @@ func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.J
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(jobID.String()),
-			redis.JobResultChannel(jobID.String()),
+			platformredis.JobKey(jobID.String()),
+			platformredis.JobResultChannel(jobID.String()),
 		},
 		domain.StatusRunning.String(),
 		attempt,
@@ -178,7 +178,7 @@ func (r *RedisJobRepository) CompleteAttempt(ctx context.Context, jobID domain.J
 	return result == 1, nil
 }
 
-var failAttemptScript = goredis.NewScript(`
+var failAttemptScript = redis.NewScript(`
 if redis.call("HGET", KEYS[1], "status") ~= ARGV[1] then
 	return 0
 end
@@ -202,8 +202,8 @@ func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(jobID.String()),
-			redis.JobResultChannel(jobID.String()),
+			platformredis.JobKey(jobID.String()),
+			platformredis.JobResultChannel(jobID.String()),
 		},
 		domain.StatusRunning.String(),
 		attempt,
@@ -218,7 +218,7 @@ func (r *RedisJobRepository) FailAttempt(ctx context.Context, jobID domain.JobID
 	return result == 1, nil
 }
 
-var recoverStaleAndEnqueueScript = goredis.NewScript(`
+var recoverStaleAndEnqueueScript = redis.NewScript(`
 local status = redis.call("HGET", KEYS[1], "status")
 
 if status == ARGV[1] or status == ARGV[2] then
@@ -258,8 +258,8 @@ func (r *RedisJobRepository) RecoverStaleAndEnqueue(ctx context.Context, jobID d
 		ctx,
 		r.rdb,
 		[]string{
-			redis.JobKey(jobID.String()),
-			redis.JobStreamKey(),
+			platformredis.JobKey(jobID.String()),
+			platformredis.JobStreamKey(),
 		},
 		domain.StatusCompleted.String(),
 		domain.StatusFailed.String(),
@@ -280,7 +280,7 @@ func (r *RedisJobRepository) RecoverStaleAndEnqueue(ctx context.Context, jobID d
 }
 
 func (r *RedisJobRepository) Get(ctx context.Context, jobID domain.JobID) (*domain.Job, error) {
-	values, err := r.rdb.HGetAll(ctx, redis.JobKey(jobID.String())).Result()
+	values, err := r.rdb.HGetAll(ctx, platformredis.JobKey(jobID.String())).Result()
 	if err != nil {
 		return nil, err
 	}

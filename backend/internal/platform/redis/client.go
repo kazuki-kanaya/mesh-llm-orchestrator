@@ -1,13 +1,13 @@
-package redis
+package platformredis
 
 import (
 	"context"
 
-	goredis "github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
-func NewClient(ctx context.Context, cfg Config) (*goredis.Client, error) {
-	client := goredis.NewClient(&goredis.Options{
+func NewClient(ctx context.Context, cfg Config) (*redis.Client, error) {
+	client := redis.NewClient(&redis.Options{
 		Addr:     cfg.Addr,
 		Password: cfg.Password,
 		DB:       cfg.DB,
