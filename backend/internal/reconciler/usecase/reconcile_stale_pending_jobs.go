@@ -5,59 +5,61 @@ import (
 	"errors"
 	"time"
 
-	jobqueuedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/domain"
-	jobqueueports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/ports"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/reconciler/domain"
+	jobmessagingdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/domain"
+	jobmessagingports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/reconciler/ports"
 )
 
 var (
-	ErrNilJobQueue          = errors.New("job queue is nil")
-	ErrNilStaleJobRecoverer = errors.New("stale job recoverer is nil")
+	ErrNilJobQueue           = errors.New("job queue is nil")
+	ErrNilJobReconcileClient = errors.New("job reconcile client is nil")
+	ErrInvalidStaleAfter     = errors.New("stale after must be positive")
+	ErrInvalidBatchSize      = errors.New("batch size must be positive")
 )
 
 type ReconcileStalePendingJobsUseCase struct {
-	queue      jobqueueports.JobQueue
-	recoverer  ports.StaleJobRecoverer
+	queue      jobmessagingports.JobQueue
+	client     ports.JobReconcileClient
 	staleAfter time.Duration
 	batchSize  int64
 }
 
 func NewReconcileStalePendingJobsUseCase(
-	queue jobqueueports.JobQueue,
-	recoverer ports.StaleJobRecoverer,
+	queue jobmessagingports.JobQueue,
+	client ports.JobReconcileClient,
 	staleAfter time.Duration,
 	batchSize int64,
 ) (*ReconcileStalePendingJobsUseCase, error) {
 	if queue == nil {
 		return nil, ErrNilJobQueue
 	}
-	if recoverer == nil {
-		return nil, ErrNilStaleJobRecoverer
+	if client == nil {
+		return nil, ErrNilJobReconcileClient
 	}
 	if staleAfter <= 0 {
-		return nil, domain.ErrInvalidStaleAfter
+		return nil, ErrInvalidStaleAfter
 	}
 	if batchSize <= 0 {
-		return nil, domain.ErrInvalidBatchSize
+		return nil, ErrInvalidBatchSize
 	}
 
 	return &ReconcileStalePendingJobsUseCase{
 		queue:      queue,
-		recoverer:  recoverer,
+		client:     client,
 		staleAfter: staleAfter,
 		batchSize:  batchSize,
 	}, nil
 }
 
 type ReconcileStalePendingJobsInput struct {
-	ConsumerName jobqueuedomain.ConsumerName
+	ConsumerName jobmessagingdomain.ConsumerName
 }
 
 type ReconcileStalePendingJobsOutput struct {
 	Claimed       int
 	Recovered     int
 	AckedTerminal int
+	AckedQueued   int
 }
 
 func (uc *ReconcileStalePendingJobsUseCase) Execute(ctx context.Context, input ReconcileStalePendingJobsInput) (*ReconcileStalePendingJobsOutput, error) {
@@ -76,7 +78,7 @@ func (uc *ReconcileStalePendingJobsUseCase) Execute(ctx context.Context, input R
 	}
 
 	for _, msg := range messages {
-		result, err := uc.recoverer.RecoverStaleAndEnqueue(ctx, msg.JobID, cutoff)
+		result, err := uc.client.RecoverStaleAndEnqueue(ctx, msg.JobID, cutoff)
 		if err != nil {
 			return nil, err
 		}
@@ -92,6 +94,11 @@ func (uc *ReconcileStalePendingJobsUseCase) Execute(ctx context.Context, input R
 				return nil, err
 			}
 			output.AckedTerminal++
+		case result.AlreadyQueued:
+			if err := uc.queue.Ack(ctx, msg.ID); err != nil {
+				return nil, err
+			}
+			output.AckedQueued++
 		}
 	}
 

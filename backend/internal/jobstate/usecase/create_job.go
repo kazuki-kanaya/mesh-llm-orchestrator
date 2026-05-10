@@ -12,10 +12,14 @@ type CreateJobUseCase struct {
 	store ports.JobStateStore
 }
 
-func NewCreateJobUseCase(store ports.JobStateStore) *CreateJobUseCase {
+func NewCreateJobUseCase(store ports.JobStateStore) (*CreateJobUseCase, error) {
+	if store == nil {
+		return nil, ErrNilJobStateStore
+	}
+
 	return &CreateJobUseCase{
 		store: store,
-	}
+	}, nil
 }
 
 type CreateJobInput struct {

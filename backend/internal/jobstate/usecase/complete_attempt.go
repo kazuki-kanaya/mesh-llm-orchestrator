@@ -12,10 +12,14 @@ type CompleteAttemptUseCase struct {
 	store ports.JobStateStore
 }
 
-func NewCompleteAttemptUseCase(store ports.JobStateStore) *CompleteAttemptUseCase {
+func NewCompleteAttemptUseCase(store ports.JobStateStore) (*CompleteAttemptUseCase, error) {
+	if store == nil {
+		return nil, ErrNilJobStateStore
+	}
+
 	return &CompleteAttemptUseCase{
 		store: store,
-	}
+	}, nil
 }
 
 type CompleteAttemptInput struct {

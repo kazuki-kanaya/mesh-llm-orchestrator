@@ -12,10 +12,14 @@ type StartAttemptUseCase struct {
 	store ports.JobStateStore
 }
 
-func NewStartAttemptUseCase(store ports.JobStateStore) *StartAttemptUseCase {
+func NewStartAttemptUseCase(store ports.JobStateStore) (*StartAttemptUseCase, error) {
+	if store == nil {
+		return nil, ErrNilJobStateStore
+	}
+
 	return &StartAttemptUseCase{
 		store: store,
-	}
+	}, nil
 }
 
 type StartAttemptInput struct {

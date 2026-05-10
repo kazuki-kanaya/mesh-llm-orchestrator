@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Service) executeRequest(ctx context.Context, req jobstatedomain.HTTPRequest) (*jobstatedomain.HTTPResponse, error) {
-	resp, err := s.client.Do(ctx, req)
+	resp, err := s.httpClient.Do(ctx, req)
 	if err != nil {
 		return nil, err
 	}

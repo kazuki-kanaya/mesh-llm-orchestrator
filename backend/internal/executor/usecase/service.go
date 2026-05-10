@@ -4,35 +4,35 @@ import (
 	"errors"
 
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/executor/ports"
-	jobqueueports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobqueue/ports"
+	jobmessagingports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
 )
 
 var (
-	ErrNilJobQueue     = errors.New("job queue is nil")
-	ErrNilJobExecution = errors.New("job execution store is nil")
-	ErrNilHTTPClient   = errors.New("http client is nil")
+	ErrNilJobQueue           = errors.New("job queue is nil")
+	ErrNilJobExecutionClient = errors.New("job execution client is nil")
+	ErrNilHTTPClient         = errors.New("http client is nil")
 )
 
 type Service struct {
-	queue     jobqueueports.JobQueue
-	execution ports.JobExecutionStore
-	client    ports.HTTPClient
+	queue              jobmessagingports.JobQueue
+	jobExecutionClient ports.JobExecutionClient
+	httpClient         ports.HTTPClient
 }
 
-func NewService(queue jobqueueports.JobQueue, execution ports.JobExecutionStore, client ports.HTTPClient) (*Service, error) {
+func NewService(queue jobmessagingports.JobQueue, jobExecutionClient ports.JobExecutionClient, httpClient ports.HTTPClient) (*Service, error) {
 	if queue == nil {
 		return nil, ErrNilJobQueue
 	}
-	if execution == nil {
-		return nil, ErrNilJobExecution
+	if jobExecutionClient == nil {
+		return nil, ErrNilJobExecutionClient
 	}
-	if client == nil {
+	if httpClient == nil {
 		return nil, ErrNilHTTPClient
 	}
 
 	return &Service{
-		queue:     queue,
-		execution: execution,
-		client:    client,
+		queue:              queue,
+		jobExecutionClient: jobExecutionClient,
+		httpClient:         httpClient,
 	}, nil
 }

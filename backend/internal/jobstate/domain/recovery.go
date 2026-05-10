@@ -1,6 +1,7 @@
 package domain
 
 type StaleJobRecoveryResult struct {
-	Recovered bool
-	Terminal  bool
+	Recovered     bool
+	Terminal      bool
+	AlreadyQueued bool
 }
