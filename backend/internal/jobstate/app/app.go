@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"time"
 
 	jobstatev1 "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/gen/go/jobstate/v1"
 	jobstateinfra "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/infrastructure"
@@ -14,6 +15,8 @@ import (
 	platformredis "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/platform/redis"
 	"google.golang.org/grpc"
 )
+
+const gracefulStopTimeout = 5 * time.Second
 
 var (
 	ErrEmptyRedisAddr = errors.New("redis addr is empty")
@@ -61,11 +64,25 @@ func Run(ctx context.Context, cfg Config) error {
 
 	go func() {
 		<-ctx.Done()
-		server.GracefulStop()
+		gracefulStop(server)
 	}()
 
 	log.Printf("jobstate grpc listening on %s", listener.Addr())
 	return server.Serve(listener)
+}
+
+func gracefulStop(server *grpc.Server) {
+	stopped := make(chan struct{})
+	go func() {
+		server.GracefulStop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(gracefulStopTimeout):
+		server.Stop()
+	}
 }
 
 func newGRPCServer(store jobstateports.JobStateStore) (*jobstategrpc.Server, error) {
