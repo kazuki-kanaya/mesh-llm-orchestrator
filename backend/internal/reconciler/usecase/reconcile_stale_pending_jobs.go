@@ -12,28 +12,28 @@ import (
 )
 
 var (
-	ErrNilJobQueue          = errors.New("job queue is nil")
-	ErrNilStaleJobRecoverer = errors.New("stale job recoverer is nil")
+	ErrNilJobQueue           = errors.New("job queue is nil")
+	ErrNilJobReconcileClient = errors.New("job reconcile client is nil")
 )
 
 type ReconcileStalePendingJobsUseCase struct {
 	queue      jobqueueports.JobQueue
-	recoverer  ports.StaleJobRecoverer
+	client     ports.JobReconcileClient
 	staleAfter time.Duration
 	batchSize  int64
 }
 
 func NewReconcileStalePendingJobsUseCase(
 	queue jobqueueports.JobQueue,
-	recoverer ports.StaleJobRecoverer,
+	client ports.JobReconcileClient,
 	staleAfter time.Duration,
 	batchSize int64,
 ) (*ReconcileStalePendingJobsUseCase, error) {
 	if queue == nil {
 		return nil, ErrNilJobQueue
 	}
-	if recoverer == nil {
-		return nil, ErrNilStaleJobRecoverer
+	if client == nil {
+		return nil, ErrNilJobReconcileClient
 	}
 	if staleAfter <= 0 {
 		return nil, domain.ErrInvalidStaleAfter
@@ -44,7 +44,7 @@ func NewReconcileStalePendingJobsUseCase(
 
 	return &ReconcileStalePendingJobsUseCase{
 		queue:      queue,
-		recoverer:  recoverer,
+		client:     client,
 		staleAfter: staleAfter,
 		batchSize:  batchSize,
 	}, nil
@@ -77,7 +77,7 @@ func (uc *ReconcileStalePendingJobsUseCase) Execute(ctx context.Context, input R
 	}
 
 	for _, msg := range messages {
-		result, err := uc.recoverer.RecoverStaleAndEnqueue(ctx, msg.JobID, cutoff)
+		result, err := uc.client.RecoverStaleAndEnqueue(ctx, msg.JobID, cutoff)
 		if err != nil {
 			return nil, err
 		}
