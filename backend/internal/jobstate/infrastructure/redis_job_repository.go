@@ -216,7 +216,11 @@ if status == ARGV[1] or status == ARGV[2] then
 	return 2
 end
 
-if status ~= ARGV[3] then
+if status == ARGV[3] then
+	return 3
+end
+
+if status ~= ARGV[4] then
 	return 0
 end
 
@@ -225,11 +229,11 @@ if not started_at_unix_milli then
 	return 0
 end
 
-if tonumber(started_at_unix_milli) > tonumber(ARGV[4]) then
+if tonumber(started_at_unix_milli) > tonumber(ARGV[5]) then
 	return 0
 end
 
-redis.call("HSET", KEYS[1], "status", ARGV[5])
+redis.call("HSET", KEYS[1], "status", ARGV[3])
 redis.call("HDEL", KEYS[1], "started_at", "started_at_unix_milli")
 redis.call("XADD", KEYS[2], "*", "job_id", ARGV[6])
 
@@ -250,9 +254,9 @@ func (r *RedisJobRepository) RecoverStaleAndEnqueue(ctx context.Context, jobID d
 		},
 		domain.StatusCompleted.String(),
 		domain.StatusFailed.String(),
+		domain.StatusQueued.String(),
 		domain.StatusRunning.String(),
 		cutoff.UTC().UnixMilli(),
-		domain.StatusQueued.String(),
 		jobID.String(),
 	).Int()
 	if err != nil {
@@ -260,8 +264,9 @@ func (r *RedisJobRepository) RecoverStaleAndEnqueue(ctx context.Context, jobID d
 	}
 
 	return domain.StaleJobRecoveryResult{
-		Recovered: result == 1,
-		Terminal:  result == 2,
+		Recovered:     result == 1,
+		Terminal:      result == 2,
+		AlreadyQueued: result == 3,
 	}, nil
 }
 

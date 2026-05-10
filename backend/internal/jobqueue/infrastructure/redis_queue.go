@@ -82,6 +82,8 @@ func (q *RedisQueue) ClaimStalePending(ctx context.Context, consumerName domain.
 		return nil, fmt.Errorf("count must be positive: %d", count)
 	}
 
+	// Start from the beginning for now. If the pending list grows large,
+	// expose the XAUTOCLAIM cursor to avoid repeatedly scanning from "0-0".
 	messages, _, err := q.rdb.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
 		Stream:   redis.JobStreamKey(),
 		Group:    redis.JobConsumerGroupName(),

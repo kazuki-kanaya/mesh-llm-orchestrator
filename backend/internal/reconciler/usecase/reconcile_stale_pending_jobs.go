@@ -58,6 +58,7 @@ type ReconcileStalePendingJobsOutput struct {
 	Claimed       int
 	Recovered     int
 	AckedTerminal int
+	AckedQueued   int
 }
 
 func (uc *ReconcileStalePendingJobsUseCase) Execute(ctx context.Context, input ReconcileStalePendingJobsInput) (*ReconcileStalePendingJobsOutput, error) {
@@ -92,6 +93,11 @@ func (uc *ReconcileStalePendingJobsUseCase) Execute(ctx context.Context, input R
 				return nil, err
 			}
 			output.AckedTerminal++
+		case result.AlreadyQueued:
+			if err := uc.queue.Ack(ctx, msg.ID); err != nil {
+				return nil, err
+			}
+			output.AckedQueued++
 		}
 	}
 
