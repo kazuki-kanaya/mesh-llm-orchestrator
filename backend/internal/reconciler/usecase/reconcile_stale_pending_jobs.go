@@ -7,13 +7,14 @@ import (
 
 	jobmessagingdomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/domain"
 	jobmessagingports "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobmessaging/ports"
-	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/reconciler/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/reconciler/ports"
 )
 
 var (
 	ErrNilJobQueue           = errors.New("job queue is nil")
 	ErrNilJobReconcileClient = errors.New("job reconcile client is nil")
+	ErrInvalidStaleAfter     = errors.New("stale after must be positive")
+	ErrInvalidBatchSize      = errors.New("batch size must be positive")
 )
 
 type ReconcileStalePendingJobsUseCase struct {
@@ -36,10 +37,10 @@ func NewReconcileStalePendingJobsUseCase(
 		return nil, ErrNilJobReconcileClient
 	}
 	if staleAfter <= 0 {
-		return nil, domain.ErrInvalidStaleAfter
+		return nil, ErrInvalidStaleAfter
 	}
 	if batchSize <= 0 {
-		return nil, domain.ErrInvalidBatchSize
+		return nil, ErrInvalidBatchSize
 	}
 
 	return &ReconcileStalePendingJobsUseCase{
