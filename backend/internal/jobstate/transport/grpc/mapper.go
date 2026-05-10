@@ -1,6 +1,7 @@
 package jobstategrpc
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -8,6 +9,24 @@ import (
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+var (
+	ErrNilProtoJob           = errors.New("proto job is nil")
+	ErrInvalidProtoJobStatus = errors.New("invalid proto job status")
+	ErrNilProtoJobCreatedAt  = errors.New("proto job created_at is nil")
+)
+
+func HTTPRequestToProto(req domain.HTTPRequest) *jobstatev1.HTTPRequest {
+	return httpRequestToProto(req)
+}
+
+func HTTPResponseToProto(resp *domain.HTTPResponse) *jobstatev1.HTTPResponse {
+	return httpResponseToProto(resp)
+}
+
+func JobFromProto(job *jobstatev1.Job) (*domain.Job, error) {
+	return jobFromProto(job)
+}
 
 func httpRequestFromProto(req *jobstatev1.HTTPRequest) domain.HTTPRequest {
 	if req == nil {
@@ -74,6 +93,36 @@ func jobToProto(job *domain.Job) *jobstatev1.Job {
 	}
 }
 
+func jobFromProto(job *jobstatev1.Job) (*domain.Job, error) {
+	if job == nil {
+		return nil, ErrNilProtoJob
+	}
+
+	jobID, err := domain.ParseJobID(job.GetId())
+	if err != nil {
+		return nil, err
+	}
+
+	jobStatus := domain.Status(job.GetStatus())
+	if !jobStatus.IsValid() {
+		return nil, ErrInvalidProtoJobStatus
+	}
+	if job.GetCreatedAt() == nil {
+		return nil, ErrNilProtoJobCreatedAt
+	}
+
+	return &domain.Job{
+		ID:             jobID,
+		Status:         jobStatus,
+		Request:        httpRequestFromProto(job.GetRequest()),
+		Response:       httpResponseFromProto(job.GetResponse()),
+		CreatedAt:      job.GetCreatedAt().AsTime(),
+		StartedAt:      timePtrFromTimestamp(job.GetStartedAt()),
+		TerminatedAt:   timePtrFromTimestamp(job.GetTerminatedAt()),
+		CurrentAttempt: job.GetCurrentAttempt(),
+	}, nil
+}
+
 func headersFromProto(headers map[string]*jobstatev1.HeaderValues) http.Header {
 	if len(headers) == 0 {
 		return nil
@@ -110,6 +159,15 @@ func timestampFromTimePtr(t *time.Time) *timestamppb.Timestamp {
 		return nil
 	}
 	return timestamppb.New(*t)
+}
+
+func timePtrFromTimestamp(t *timestamppb.Timestamp) *time.Time {
+	if t == nil {
+		return nil
+	}
+
+	value := t.AsTime()
+	return &value
 }
 
 func cloneStrings(values []string) []string {

@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"errors"
-	"time"
 
 	jobstatedomain "github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/jobstate/domain"
 	"github.com/kazuki-kanaya/mesh-llm-orchestrator/backend/internal/requestapi/ports"
@@ -34,17 +33,12 @@ type ProxyRequestOutput struct {
 }
 
 func (uc *ProxyRequestUseCase) Execute(ctx context.Context, input ProxyRequestInput) (*ProxyRequestOutput, error) {
-	id := jobstatedomain.NewJobID()
-	job, err := jobstatedomain.NewJob(id, input.Request, time.Now().UTC())
+	jobID, err := uc.client.CreateAndEnqueue(ctx, input.Request)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := uc.client.CreateAndEnqueue(ctx, job); err != nil {
-		return nil, err
-	}
-
-	terminalJob, err := uc.client.Wait(ctx, job.ID)
+	terminalJob, err := uc.client.Wait(ctx, jobID)
 	if err != nil {
 		return nil, err
 	}
