@@ -1,0 +1,47 @@
+package usecase
+
+import (
+	"context"
+	"time"
+
+	"github.com/kazuki-kanaya/quegress/internal/jobstate/domain"
+	"github.com/kazuki-kanaya/quegress/internal/jobstate/ports"
+)
+
+type FailAttemptUseCase struct {
+	store ports.JobStateStore
+}
+
+func NewFailAttemptUseCase(store ports.JobStateStore) (*FailAttemptUseCase, error) {
+	if store == nil {
+		return nil, ErrNilJobStateStore
+	}
+
+	return &FailAttemptUseCase{
+		store: store,
+	}, nil
+}
+
+type FailAttemptInput struct {
+	JobID   domain.JobID
+	Attempt int64
+}
+
+type FailAttemptOutput struct {
+	Accepted bool
+}
+
+func (uc *FailAttemptUseCase) Execute(ctx context.Context, input FailAttemptInput) (*FailAttemptOutput, error) {
+	if err := input.JobID.Validate(); err != nil {
+		return nil, err
+	}
+
+	accepted, err := uc.store.FailAttempt(ctx, input.JobID, input.Attempt, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+
+	return &FailAttemptOutput{
+		Accepted: accepted,
+	}, nil
+}
