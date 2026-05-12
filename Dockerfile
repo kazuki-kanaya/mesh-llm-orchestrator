@@ -4,6 +4,9 @@ ARG GO_VERSION=1.26.1
 
 FROM golang:${GO_VERSION}-alpine AS build
 
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -11,10 +14,10 @@ RUN go mod download
 
 COPY . ./
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/jobstate ./cmd/jobstate
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/requestapi ./cmd/requestapi
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/executor ./cmd/executor
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/reconciler ./cmd/reconciler
+RUN for bin in jobstate requestapi executor reconciler; do \
+      CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+      go build -trimpath -ldflags="-s -w" -o /out/${bin} ./cmd/${bin}; \
+    done
 
 FROM gcr.io/distroless/static-debian12:nonroot
 

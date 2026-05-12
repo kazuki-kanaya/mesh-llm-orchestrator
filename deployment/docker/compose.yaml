@@ -1,3 +1,9 @@
+x-quegress-image: &quegress-image
+  image: quegress:dev
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+
 services:
   redis:
     image: valkey/valkey:8-alpine
@@ -13,7 +19,7 @@ services:
       - "127.0.0.1:9000:8080"
 
   jobstate:
-    image: quegress:dev
+    <<: *quegress-image
     command: ["/usr/local/bin/jobstate"]
     environment:
       REDIS_ADDR: redis:6379
@@ -22,7 +28,7 @@ services:
       - redis
 
   requestapi:
-    image: quegress:dev
+    <<: *quegress-image
     command: ["/usr/local/bin/requestapi"]
     ports:
       - "127.0.0.1:8080:8080"
@@ -37,7 +43,7 @@ services:
       - jobstate
 
   executor:
-    image: quegress:dev
+    <<: *quegress-image
     command: ["/usr/local/bin/executor"]
     environment:
       REDIS_ADDR: redis:6379
@@ -52,7 +58,7 @@ services:
       - httpbin
 
   reconciler:
-    image: quegress:dev
+    <<: *quegress-image
     command: ["/usr/local/bin/reconciler"]
     environment:
       REDIS_ADDR: redis:6379
