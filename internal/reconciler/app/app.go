@@ -35,23 +35,8 @@ type Config struct {
 }
 
 func Run(ctx context.Context, cfg Config) error {
-	if cfg.RedisAddr == "" {
-		return ErrEmptyRedisAddr
-	}
-	if cfg.JobStateGRPCAddr == "" {
-		return ErrEmptyJobStateAddress
-	}
-	if cfg.ConsumerName == "" {
-		return ErrEmptyConsumerName
-	}
-	if cfg.StaleAfter <= 0 {
-		return ErrInvalidStaleAfter
-	}
-	if cfg.BatchSize <= 0 {
-		return ErrInvalidBatchSize
-	}
-	if cfg.Interval <= 0 {
-		return ErrInvalidInterval
+	if err := cfg.validate(); err != nil {
+		return err
 	}
 
 	rdb, err := platformredis.NewClient(ctx, platformredis.Config{
@@ -113,6 +98,28 @@ func Run(ctx context.Context, cfg Config) error {
 			logOutput(output)
 		}
 	}
+}
+
+func (cfg Config) validate() error {
+	if cfg.RedisAddr == "" {
+		return ErrEmptyRedisAddr
+	}
+	if cfg.JobStateGRPCAddr == "" {
+		return ErrEmptyJobStateAddress
+	}
+	if cfg.ConsumerName == "" {
+		return ErrEmptyConsumerName
+	}
+	if cfg.StaleAfter <= 0 {
+		return ErrInvalidStaleAfter
+	}
+	if cfg.BatchSize <= 0 {
+		return ErrInvalidBatchSize
+	}
+	if cfg.Interval <= 0 {
+		return ErrInvalidInterval
+	}
+	return nil
 }
 
 func logOutput(output *reconcilerusecase.ReconcileStalePendingJobsOutput) {

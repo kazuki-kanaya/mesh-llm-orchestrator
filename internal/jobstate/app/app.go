@@ -29,11 +29,8 @@ type Config struct {
 }
 
 func Run(ctx context.Context, cfg Config) error {
-	if cfg.RedisAddr == "" {
-		return ErrEmptyRedisAddr
-	}
-	if cfg.GRPCAddr == "" {
-		return ErrEmptyGRPCAddr
+	if err := cfg.validate(); err != nil {
+		return err
 	}
 
 	rdb, err := platformredis.NewClient(ctx, platformredis.Config{
@@ -69,6 +66,16 @@ func Run(ctx context.Context, cfg Config) error {
 
 	log.Printf("jobstate grpc listening on %s", listener.Addr())
 	return server.Serve(listener)
+}
+
+func (cfg Config) validate() error {
+	if cfg.RedisAddr == "" {
+		return ErrEmptyRedisAddr
+	}
+	if cfg.GRPCAddr == "" {
+		return ErrEmptyGRPCAddr
+	}
+	return nil
 }
 
 func gracefulStop(server *grpc.Server) {
