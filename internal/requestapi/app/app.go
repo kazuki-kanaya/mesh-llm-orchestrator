@@ -40,20 +40,8 @@ type Config struct {
 }
 
 func Run(ctx context.Context, cfg Config) error {
-	if cfg.RedisAddr == "" {
-		return ErrEmptyRedisAddr
-	}
-	if cfg.JobStateGRPCAddr == "" {
-		return ErrEmptyJobStateAddress
-	}
-	if cfg.HTTPAddr == "" {
-		return ErrEmptyHTTPAddr
-	}
-	if cfg.TargetBaseURL == "" {
-		return ErrEmptyTargetBaseURL
-	}
-	if cfg.WaitTimeout <= 0 {
-		return ErrInvalidWaitTimeout
+	if err := cfg.validate(); err != nil {
+		return err
 	}
 
 	rdb, err := platformredis.NewClient(ctx, platformredis.Config{
@@ -114,5 +102,24 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
+	return nil
+}
+
+func (cfg Config) validate() error {
+	if cfg.RedisAddr == "" {
+		return ErrEmptyRedisAddr
+	}
+	if cfg.JobStateGRPCAddr == "" {
+		return ErrEmptyJobStateAddress
+	}
+	if cfg.HTTPAddr == "" {
+		return ErrEmptyHTTPAddr
+	}
+	if cfg.TargetBaseURL == "" {
+		return ErrEmptyTargetBaseURL
+	}
+	if cfg.WaitTimeout <= 0 {
+		return ErrInvalidWaitTimeout
+	}
 	return nil
 }

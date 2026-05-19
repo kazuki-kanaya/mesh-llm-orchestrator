@@ -20,6 +20,7 @@ func main() {
 		RedisAddr:        mustGetEnv("REDIS_ADDR"),
 		JobStateGRPCAddr: mustGetEnv("JOBSTATE_GRPC_ADDR"),
 		ConsumerName:     mustGetEnv("EXECUTOR_CONSUMER_NAME"),
+		Concurrency:      mustIntEnv("EXECUTOR_CONCURRENCY"),
 		RetryBackoff:     mustDurationEnv("EXECUTOR_RETRY_BACKOFF"),
 		RequestTimeout:   mustDurationEnv("EXECUTOR_REQUEST_TIMEOUT"),
 		MaxResponseBytes: mustInt64Env("EXECUTOR_MAX_RESPONSE_BYTES"),
@@ -48,6 +49,15 @@ func mustDurationEnv(key string) time.Duration {
 func mustInt64Env(key string) int64 {
 	value := mustGetEnv(key)
 	n, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || n <= 0 {
+		log.Fatalf("%s must be a positive integer: %q", key, value)
+	}
+	return n
+}
+
+func mustIntEnv(key string) int {
+	value := mustGetEnv(key)
+	n, err := strconv.Atoi(value)
 	if err != nil || n <= 0 {
 		log.Fatalf("%s must be a positive integer: %q", key, value)
 	}

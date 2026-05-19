@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	jobstatev1 "github.com/kazuki-kanaya/quegress/gen/go/jobstate/v1"
@@ -21,6 +22,7 @@ var (
 	ErrEmptyRedisAddr          = errors.New("redis addr is empty")
 	ErrEmptyJobStateAddress    = errors.New("jobstate grpc addr is empty")
 	ErrEmptyConsumerName       = errors.New("consumer name is empty")
+	ErrInvalidConcurrency      = errors.New("concurrency must be positive")
 	ErrInvalidRetryBackoff     = errors.New("retry backoff must be positive")
 	ErrInvalidRequestTimeout   = errors.New("request timeout must be positive")
 	ErrInvalidMaxResponseBytes = errors.New("max response bytes must be positive")
@@ -30,29 +32,15 @@ type Config struct {
 	RedisAddr        string
 	JobStateGRPCAddr string
 	ConsumerName     string
+	Concurrency      int
 	RetryBackoff     time.Duration
 	RequestTimeout   time.Duration
 	MaxResponseBytes int64
 }
 
 func Run(ctx context.Context, cfg Config) error {
-	if cfg.RedisAddr == "" {
-		return ErrEmptyRedisAddr
-	}
-	if cfg.JobStateGRPCAddr == "" {
-		return ErrEmptyJobStateAddress
-	}
-	if cfg.ConsumerName == "" {
-		return ErrEmptyConsumerName
-	}
-	if cfg.RetryBackoff <= 0 {
-		return ErrInvalidRetryBackoff
-	}
-	if cfg.RequestTimeout <= 0 {
-		return ErrInvalidRequestTimeout
-	}
-	if cfg.MaxResponseBytes <= 0 {
-		return ErrInvalidMaxResponseBytes
+	if err := cfg.validate(); err != nil {
+		return err
 	}
 
 	rdb, err := platformredis.NewClient(ctx, platformredis.Config{
@@ -94,19 +82,53 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	log.Printf("executor started: consumer=%s", consumerName)
+	log.Printf("executor started: consumer=%s concurrency=%d", consumerName, cfg.Concurrency)
 
 	input := executorusecase.ProcessMessageInput{
 		ConsumerName: consumerName,
 	}
 
-	for ctx.Err() == nil {
-		if err := processMessage.Execute(ctx, input); err != nil {
-			log.Printf("failed to process message: %v", err)
-			sleep(ctx, cfg.RetryBackoff)
-		}
+	var wg sync.WaitGroup
+	wg.Add(cfg.Concurrency)
+	for workerID := 1; workerID <= cfg.Concurrency; workerID++ {
+		go func(workerID int) {
+			defer wg.Done()
+
+			for ctx.Err() == nil {
+				if err := processMessage.Execute(ctx, input); err != nil {
+					log.Printf("executor worker failed to process message: worker=%d err=%v", workerID, err)
+					sleep(ctx, cfg.RetryBackoff)
+				}
+			}
+		}(workerID)
 	}
 
+	wg.Wait()
+	return nil
+}
+
+func (cfg Config) validate() error {
+	if cfg.RedisAddr == "" {
+		return ErrEmptyRedisAddr
+	}
+	if cfg.JobStateGRPCAddr == "" {
+		return ErrEmptyJobStateAddress
+	}
+	if cfg.ConsumerName == "" {
+		return ErrEmptyConsumerName
+	}
+	if cfg.Concurrency <= 0 {
+		return ErrInvalidConcurrency
+	}
+	if cfg.RetryBackoff <= 0 {
+		return ErrInvalidRetryBackoff
+	}
+	if cfg.RequestTimeout <= 0 {
+		return ErrInvalidRequestTimeout
+	}
+	if cfg.MaxResponseBytes <= 0 {
+		return ErrInvalidMaxResponseBytes
+	}
 	return nil
 }
 
